@@ -26,36 +26,54 @@ def _safe_next(target: str | None) -> str | None:
     return None
 
 
+IP_BLOCKED_MSG = "Muitas tentativas incorretas a partir desta rede. Aguarde alguns minutos e tente novamente."
+
+
+def _count_failure(user: User | None, kind: str):
+    """Erro de senha ou de código: conta para o IP e, se a conta existe, para o bloqueio da conta."""
+    sec.record_failed_attempt(kind)
+    if user:
+        cfg = current_app.config
+        user.failed_logins += 1
+        if user.failed_logins >= cfg["MAX_FAILED_LOGINS"]:
+            user.locked_until = now() + timedelta(minutes=cfg["LOCK_MINUTES"])
+            user.failed_logins = 0
+    db.session.commit()
+
+
+def _locked(user: User | None) -> bool:
+    return bool(user and user.locked_until and user.locked_until > now())
+
+
 @bp.route("/entrar", methods=["GET", "POST"])
 def login():
     if sec.current_user():
         return redirect(_home(sec.current_user()))
     if request.method == "POST":
+        if sec.ip_blocked():
+            flash(IP_BLOCKED_MSG, "error")
+            return render_template("login.html"), 429
         email = (request.form.get("email") or "").strip().lower()
         pw = request.form.get("password") or ""
         user = User.query.filter_by(email=email).first()
-        cfg = current_app.config
-        if user and user.locked_until and user.locked_until > now():
+        if _locked(user):
+            sec.record_failed_attempt("senha")
+            db.session.commit()
             flash("Acesso temporariamente bloqueado por tentativas incorretas. Tente novamente em alguns minutos.", "error")
         elif user and user.active and user.check_password(pw):
-            user.failed_logins, user.locked_until = 0, None
-            db.session.commit()
             if user.totp_secret:
+                # o contador da conta só zera depois do segundo fator
                 session.clear()
                 session["pending_uid"] = user.id
                 session["next"] = _safe_next(request.args.get("next")) or ""
                 return redirect(url_for("auth.verify_2fa"))
+            user.failed_logins, user.locked_until = 0, None
             sec.login_user(user)
             user.last_login_at = now()
             db.session.commit()
             return redirect(_safe_next(request.args.get("next")) or _home(user))
         else:
-            if user:
-                user.failed_logins += 1
-                if user.failed_logins >= cfg["MAX_FAILED_LOGINS"]:
-                    user.locked_until = now() + timedelta(minutes=cfg["LOCK_MINUTES"])
-                    user.failed_logins = 0
-                db.session.commit()
+            _count_failure(user, "senha")
             flash("E-mail ou senha incorretos.", "error")
     return render_template("login.html")
 
@@ -64,15 +82,28 @@ def login():
 def verify_2fa():
     uid = session.get("pending_uid")
     user = db.session.get(User, uid) if uid else None
-    if not user:
+    if not user or not user.active:
+        return redirect(url_for("auth.login"))
+    if _locked(user):
+        session.clear()
+        flash("Acesso temporariamente bloqueado por tentativas incorretas. Tente novamente em alguns minutos.", "error")
         return redirect(url_for("auth.login"))
     if request.method == "POST":
+        if sec.ip_blocked():
+            flash(IP_BLOCKED_MSG, "error")
+            return render_template("verificacao.html"), 429
         if sec.verify_totp(user.totp_secret, request.form.get("code", "")):
             nxt = session.get("next")
             sec.login_user(user)
+            user.failed_logins, user.locked_until = 0, None
             user.last_login_at = now()
             db.session.commit()
             return redirect(_safe_next(nxt) or _home(user))
+        _count_failure(user, "2fa")
+        if _locked(user):
+            session.clear()
+            flash("Acesso temporariamente bloqueado por tentativas incorretas. Tente novamente em alguns minutos.", "error")
+            return redirect(url_for("auth.login"))
         flash("Código incorreto ou expirado.", "error")
     return render_template("verificacao.html")
 

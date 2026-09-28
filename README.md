@@ -21,7 +21,7 @@ Para ver o sistema já com dados de exemplo (apenas em ambiente de teste):
 ```bash
 flask demo-data                     # gestor@demo.test / demo-senha-123 ; parceiro3@demo.test / senha-segura-123
 flask simulate-bonus                # confere a Camada 2 em banco temporário: R$ 34.560 + R$ 17.280 = 22,5%
-pytest -q                           # 65 testes
+pytest -q                           # 69 testes (também rodam no GitHub Actions a cada push)
 ```
 
 ## Perfis internos
@@ -40,9 +40,12 @@ Parceiros só enxergam os próprios dados. A empresa já indicada por outro parc
 1. Servidor com HTTPS (o cookie de sessão só trafega seguro).
 2. Variáveis: `FF_SECRET_KEY` (texto longo e aleatório), `FF_ENV=production`, `FF_COOKIE_SECURE=1`,
    `FF_PUBLIC_URL` (endereço público), `FF_REQUIRE_2FA=1` (exige duas etapas da equipe interna).
+   Atrás de proxy reverso (nginx, balanceador): `FF_TRUSTED_PROXIES=1` (número de proxies), senão o limite
+   por IP enxerga só o endereço do proxy. **Não** ligue sem proxy: qualquer um poderia forjar o IP.
+   Limite por IP (opcional): `FF_IP_MAX_FAILURES` (padrão 20 erros) em `FF_IP_WINDOW_MINUTES` (padrão 15).
    E-mail (opcional): `FF_SMTP_HOST`, `FF_SMTP_PORT`, `FF_SMTP_USER`, `FF_SMTP_PASS`, `FF_MAIL_FROM`.
 3. `docker build -t finder-fee . && docker run -p 8000:8000 -v finderfee-data:/srv/finder_fee/instance --env-file .env finder-fee`
-4. Rotina diária (cron): `flask run-jobs` (expira proteções vencidas e envia avisos por e-mail).
+4. Rotina diária (cron): `flask run-jobs` (expira proteções vencidas, apaga o registro de tentativas de acesso com mais de 1 dia e envia avisos por e-mail).
 5. Rotina semanal (segunda-feira): `flask weekly-report`, ou pelo botão em "Relatório semanal".
 6. **Backup** da pasta `instance/` (banco, NFs anexadas e relatórios) todos os dias.
 
@@ -85,6 +88,8 @@ a comissão só é gerada quando o cliente paga. Pagamento no mês seguinte ao r
 - Envio de e-mail (SMTP) implementado e **não testado** contra um servidor real. Sem SMTP, os avisos ficam só no portal.
 - A NF é armazenada como arquivo; o sistema não lê o XML nem valida a nota na Receita.
 - A situação ativa do CNPJ é confirmada manualmente pela equipe (não há consulta automática).
-- Sem limite de tentativas por IP (há bloqueio por conta após 5 erros) e sem política de retenção/eliminação de dados
-  (LGPD). Recomenda-se uma revisão de segurança independente antes de abrir para parceiros.
+- Acesso: bloqueio da conta após 5 erros (senha ou código de duas etapas) e limite de erros por IP. O limite fica
+  no banco, então vale para todos os processos do gunicorn.
+- Sem política de retenção/eliminação de dados (LGPD). Recomenda-se uma revisão de segurança independente antes de
+  abrir para parceiros.
 - Feriados não vêm de fábrica e ainda não há campo na tela para cadastrá-los: hoje os prazos em dias úteis só descontam fins de semana. A lista fica em `holidays` (arquivo `app/rules.py`).

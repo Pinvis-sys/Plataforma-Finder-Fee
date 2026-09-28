@@ -864,4 +864,5 @@ def manager_queues(on: date | None = None) -> dict:
 
 
 def run_daily_jobs() -> dict:
-    return {"expiradas": expire_protections()}
+    from .security import prune_login_attempts
+    return {"expiradas": expire_protections(), "tentativas_removidas": prune_login_attempts()}

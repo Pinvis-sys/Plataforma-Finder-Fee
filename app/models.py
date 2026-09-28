@@ -390,6 +390,15 @@ class AuditLog(db.Model):
     details = db.Column(db.JSON)
 
 
+class LoginAttempt(db.Model):
+    """Tentativa de acesso malsucedida, para limitar erros por endereço IP."""
+    __tablename__ = "login_attempt"
+    id = db.Column(db.Integer, primary_key=True)
+    ip = db.Column(db.String(64), nullable=False, index=True)
+    kind = db.Column(db.String(20), nullable=False)          # senha | 2fa
+    at = db.Column(db.DateTime, default=now, nullable=False, index=True)
+
+
 class ReportEdition(db.Model):
     __tablename__ = "report_edition"
     id = db.Column(db.Integer, primary_key=True)

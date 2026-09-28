@@ -22,6 +22,11 @@ def create_app(config: dict | None = None, web: bool = True) -> Flask:
     if app.config["SECRET_KEY"] == "dev-troque-esta-chave" and os.environ.get("FF_ENV") == "production":
         raise RuntimeError("Defina FF_SECRET_KEY em produção.")
 
+    if app.config["TRUSTED_PROXIES"] > 0:
+        from werkzeug.middleware.proxy_fix import ProxyFix
+        n = app.config["TRUSTED_PROXIES"]
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=n, x_proto=n, x_host=n)
+
     db.init_app(app)
     from . import models  # noqa: F401
     from .security import init_security

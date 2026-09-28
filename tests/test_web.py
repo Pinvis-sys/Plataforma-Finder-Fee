@@ -185,3 +185,69 @@ def test_papeis_financeiro_nao_edita_indicacao(webapp):
     assert c.post(f"/gestao/indicacoes/{ref.id}", data={"action": "accept"}).status_code == 403
     assert c.get("/gestao/financeiro").status_code == 200
     assert c.get("/gestao/parametros").status_code == 403
+
+
+def test_limite_por_ip_bloqueia_varias_contas(webapp):
+    webapp.config["IP_MAX_FAILURES"] = 6
+    seed.seed_demo()
+    c = webapp.test_client()
+    # erros espalhados por e-mails diferentes não travam nenhuma conta, mas travam o IP
+    for i in range(6):
+        assert c.post("/entrar", data={"email": f"x{i}@t.test", "password": "errada"}).status_code == 200
+    r = c.post("/entrar", data={"email": "parceiro1@demo.test", "password": "senha-segura-123"})
+    assert r.status_code == 429
+    assert "Location" not in r.headers
+    # outro endereço continua entrando normalmente
+    outro = webapp.test_client()
+    r = outro.post("/entrar", data={"email": "parceiro1@demo.test", "password": "senha-segura-123"},
+                   environ_base={"REMOTE_ADDR": "10.0.0.9"})
+    assert r.status_code == 302
+
+
+def test_limite_por_ip_expira_e_e_limpo_pela_rotina(webapp):
+    from datetime import timedelta
+    from app import security as sec
+    from app.core import now
+    from app.models import LoginAttempt
+    webapp.config["IP_MAX_FAILURES"] = 2
+    old = now() - timedelta(minutes=webapp.config["IP_WINDOW_MINUTES"] + 1)
+    db.session.add_all([LoginAttempt(ip="1.2.3.4", kind="senha", at=old) for _ in range(3)])
+    db.session.commit()
+    assert not sec.ip_blocked("1.2.3.4")                      # fora da janela
+    db.session.add_all([LoginAttempt(ip="1.2.3.4", kind="senha") for _ in range(2)])
+    db.session.commit()
+    assert sec.ip_blocked("1.2.3.4")
+    db.session.add(LoginAttempt(ip="1.2.3.4", kind="senha", at=now() - timedelta(days=2)))
+    db.session.commit()
+    assert svc.run_daily_jobs()["tentativas_removidas"] == 1
+
+
+def test_codigo_2fa_errado_bloqueia_a_conta(webapp):
+    from app import security as sec
+    u = seed.create_staff("s2@t.test", "Staff", "admin", "senha-longa-123")
+    u.totp_secret = sec.new_totp_secret()
+    db.session.commit()
+    c = webapp.test_client()
+    c.post("/entrar", data={"email": "s2@t.test", "password": "senha-longa-123"})
+    for _ in range(webapp.config["MAX_FAILED_LOGINS"] - 1):
+        assert c.post("/entrar/verificacao", data={"code": "000000"}).status_code == 200
+    r = c.post("/entrar/verificacao", data={"code": "000000"})
+    assert r.headers["Location"].endswith("/entrar")          # sessão pendente descartada
+    assert c.get("/entrar/verificacao").headers["Location"].endswith("/entrar")
+    # nem a senha certa entra enquanto a conta está bloqueada
+    r = c.post("/entrar", data={"email": "s2@t.test", "password": "senha-longa-123"})
+    assert b"bloqueado" in r.data
+
+
+def test_proxy_confiavel_usa_ip_do_cabecalho(tmp_path):
+    from app import create_app
+    from app import security as sec
+    app = create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:", "SECRET_KEY": "t",
+                      "TRUSTED_PROXIES": 1}, web=False)
+
+    @app.route("/_ip")
+    def _ip():
+        return sec.client_ip()
+
+    r = app.test_client().get("/_ip", headers={"X-Forwarded-For": "203.0.113.7"})
+    assert r.get_data(as_text=True) == "203.0.113.7"

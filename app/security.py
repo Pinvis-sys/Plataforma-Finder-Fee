@@ -8,11 +8,12 @@ import hmac
 import secrets
 import struct
 import time
+from datetime import timedelta
 
 from flask import abort, current_app, flash, g, redirect, request, session, url_for
 
-from .core import db
-from .models import User
+from .core import db, now
+from .models import LoginAttempt, User
 
 
 # ----------------------------------------------------------------- TOTP (RFC 6238)
@@ -40,6 +41,29 @@ def verify_totp(secret: str, code: str, at: float | None = None) -> bool:
 
 def provisioning_uri(secret: str, email: str) -> str:
     return f"otpauth://totp/AllTargets%20Finder%20Fee:{email}?secret={secret}&issuer=AllTargets"
+
+
+# ----------------------------------------------------------------- limite por IP
+def client_ip() -> str:
+    """Endereço do cliente. Atrás de proxy reverso, o app aplica ProxyFix (FF_TRUSTED_PROXIES)."""
+    return (request.remote_addr or "desconhecido")[:64]
+
+
+def ip_blocked(ip: str | None = None) -> bool:
+    cfg = current_app.config
+    since = now() - timedelta(minutes=cfg["IP_WINDOW_MINUTES"])
+    n = LoginAttempt.query.filter(LoginAttempt.ip == (ip or client_ip()), LoginAttempt.at >= since).count()
+    return n >= cfg["IP_MAX_FAILURES"]
+
+
+def record_failed_attempt(kind: str, ip: str | None = None):
+    db.session.add(LoginAttempt(ip=ip or client_ip(), kind=kind))
+
+
+def prune_login_attempts(older_than: timedelta = timedelta(days=1)) -> int:
+    n = LoginAttempt.query.filter(LoginAttempt.at < now() - older_than).delete(synchronize_session=False)
+    db.session.commit()
+    return n
 
 
 # ----------------------------------------------------------------- sessão
