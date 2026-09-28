@@ -1,0 +1,2 @@
+Certificado e chave AUTOASSINADOS, só para os testes de e-mail (servidor SMTP local).
+Não usar em nenhum servidor real.

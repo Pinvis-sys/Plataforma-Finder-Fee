@@ -6,3 +6,4 @@ reportlab>=4.0
 gunicorn>=22
 pytest>=8
 psycopg[binary]>=3.2
+aiosmtpd>=1.4

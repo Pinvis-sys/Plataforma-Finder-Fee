@@ -47,19 +47,59 @@ def notify(key: str, message: str, partner_id: int | None = None, user_id: int |
         db.session.add(Notification(user_id=user_id, key=key, message=message))
 
 
+def _smtp_connect(cfg):
+    import smtplib
+    import ssl
+    security = (cfg.get("SMTP_SECURITY") or ("ssl" if int(cfg["SMTP_PORT"]) == 465 else "starttls")).lower()
+    if security not in ("starttls", "ssl", "none"):
+        raise ValueError(f"FF_SMTP_SECURITY inválido: {security!r} (use starttls, ssl ou none).")
+    # verifica certificado e nome do servidor (o padrão do smtplib não verifica)
+    ctx = ssl.create_default_context(cafile=cfg.get("SMTP_CA_FILE") or None)
+    if security == "ssl":
+        smtp = smtplib.SMTP_SSL(cfg["SMTP_HOST"], cfg["SMTP_PORT"], timeout=cfg["SMTP_TIMEOUT"], context=ctx)
+    else:
+        smtp = smtplib.SMTP(cfg["SMTP_HOST"], cfg["SMTP_PORT"], timeout=cfg["SMTP_TIMEOUT"])
+    try:
+        if security == "starttls":
+            smtp.starttls(context=ctx)
+        if cfg.get("SMTP_USER"):
+            smtp.login(cfg["SMTP_USER"], cfg["SMTP_PASS"])
+    except Exception:
+        smtp.close()
+        raise
+    return smtp
+
+
+def _permanent_refusal(exc) -> tuple[int, str] | None:
+    """Recusa definitiva (5xx) deste destinatário/mensagem; None = falha temporária ou da conexão."""
+    import smtplib
+    if isinstance(exc, smtplib.SMTPRecipientsRefused):
+        code, msg = next(iter(exc.recipients.values()))
+    elif isinstance(exc, (smtplib.SMTPDataError, smtplib.SMTPSenderRefused)):
+        code, msg = exc.smtp_code, exc.smtp_error
+    else:
+        return None
+    if not 500 <= code < 600:
+        return None
+    return code, msg.decode(errors="replace") if isinstance(msg, bytes) else str(msg)
+
+
 def send_pending_emails(app) -> int:
-    """Envia por SMTP os avisos ainda não enviados (se SMTP configurado). Rodar por cron."""
+    """Envia por SMTP os avisos ainda não enviados (se SMTP configurado). Rodar por cron.
+
+    Cada aviso enviado é gravado na hora, então uma falha no meio do lote não gera reenvio.
+    Endereço recusado em definitivo (5xx) é marcado como tratado e registrado na auditoria,
+    para não travar a fila. Falha temporária (4xx, conexão) interrompe o lote; o resto fica
+    para a próxima rodada."""
     cfg = app.config
     if not cfg.get("SMTP_HOST"):
         return 0
-    import smtplib
     from email.message import EmailMessage
     sent = 0
-    pend = Notification.query.filter(Notification.emailed_at.is_(None), Notification.user_id.isnot(None)).limit(200).all()
-    with smtplib.SMTP(cfg["SMTP_HOST"], cfg["SMTP_PORT"], timeout=15) as smtp:
-        smtp.starttls()
-        if cfg.get("SMTP_USER"):
-            smtp.login(cfg["SMTP_USER"], cfg["SMTP_PASS"])
+    pend = Notification.query.filter(Notification.emailed_at.is_(None), Notification.user_id.isnot(None)).order_by(Notification.id).limit(200).all()
+    if not pend:
+        return 0
+    with _smtp_connect(cfg) as smtp:
         for n in pend:
             user = db.session.get(User, n.user_id)
             if not user:
@@ -67,10 +107,19 @@ def send_pending_emails(app) -> int:
             msg = EmailMessage()
             msg["From"], msg["To"], msg["Subject"] = cfg["MAIL_FROM"], user.email, "Programa Finder Fee All Targets"
             msg.set_content(f"{n.message}\n\nAcesse: {cfg['PUBLIC_BASE_URL']}")
-            smtp.send_message(msg)
+            try:
+                smtp.send_message(msg)
+            except Exception as e:  # noqa: BLE001 - classificada abaixo
+                refused = _permanent_refusal(e)
+                if refused is None:
+                    raise
+                n.emailed_at = now()
+                audit("sistema", "email.refused", "notification", n.id, to=user.email, code=refused[0], reason=refused[1][:200])
+                db.session.commit()
+                continue
             n.emailed_at = now()
+            db.session.commit()
             sent += 1
-    db.session.commit()
     return sent
 
 
