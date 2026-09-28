@@ -5,9 +5,13 @@ import os
 
 import click
 from flask import Flask
+from flask_migrate import Migrate
 
 from . import core
 from .core import Config, db
+
+
+MIGRATIONS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "migrations")
 
 
 def create_app(config: dict | None = None, web: bool = True) -> Flask:
@@ -29,6 +33,9 @@ def create_app(config: dict | None = None, web: bool = True) -> Flask:
 
     db.init_app(app)
     from . import models  # noqa: F401
+    # Migrações do banco (Alembic). render_as_batch: o SQLite só altera coluna recriando a tabela.
+    Migrate(app, db, directory=MIGRATIONS_DIR, render_as_batch=True, compare_type=True,
+            render_item=core.render_migration_item)
     from .security import init_security
     init_security(app)
 
@@ -50,8 +57,10 @@ def _register_cli(app: Flask):
 
     @app.cli.command("init-db")
     def init_db():
-        """Cria as tabelas e os dados iniciais (regras Piloto v1, termos pendentes do jurídico)."""
-        db.create_all()
+        """Cria ou atualiza o banco (aplica as migrações pendentes) e grava os dados iniciais.
+        Pode rodar a cada implantação: o que já foi aplicado não se repete."""
+        from flask_migrate import upgrade
+        upgrade()
         seed.seed_defaults()
         click.echo("Banco pronto.")
 
@@ -68,7 +77,8 @@ def _register_cli(app: Flask):
     @app.cli.command("demo-data")
     def demo_data():
         """Carrega dados de demonstração (NÃO usar em produção)."""
-        db.create_all()
+        from flask_migrate import upgrade
+        upgrade()
         seed.seed_defaults()
         seed.seed_demo()
         click.echo("Dados de demonstração carregados. Acesso: gestor@demo.test / demo-senha-123")

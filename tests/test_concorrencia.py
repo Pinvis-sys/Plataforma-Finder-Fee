@@ -59,3 +59,32 @@ def test_empresas_diferentes_ao_mesmo_tempo_todas_gravadas(app, parceiros):
     assert r == ["ok"] * len(parceiros)
     codes = [x.code for x in Referral.query.all()]
     assert len(set(codes)) == len(parceiros) and all(codes)
+
+
+def test_mesmo_codigo_de_duas_etapas_ao_mesmo_tempo_so_um_entra(webapp):
+    """Cinco logins simultâneos com a mesma senha e o mesmo código: só um abre sessão."""
+    import time
+    from app import security as sec
+    from app.models import User, UserSession
+    u = seed.create_staff("s@t.test", "Staff", "admin", "senha-longa-123")
+    u.totp_secret = sec.new_totp_secret()
+    db.session.commit()
+    uid, code = u.id, sec.totp_now(u.totp_secret, time.time())
+    db.session.remove()
+
+    clients = [webapp.test_client() for _ in range(5)]
+    for c in clients:
+        assert c.post("/entrar", data={"email": "s@t.test", "password": "senha-longa-123"}).status_code == 302
+    barrier, out = threading.Barrier(len(clients)), []
+
+    def worker(c):
+        barrier.wait()
+        out.append(c.post("/entrar/verificacao", data={"code": code}).status_code)
+
+    ts = [threading.Thread(target=worker, args=(c,)) for c in clients]
+    for t in ts:
+        t.start()
+    for t in ts:
+        t.join()
+    assert sorted(out) == [200] * 4 + [302]
+    assert UserSession.query.filter_by(user_id=uid).count() == 1

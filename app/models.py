@@ -56,6 +56,7 @@ class User(db.Model):
     failed_logins = db.Column(db.Integer, default=0, nullable=False)
     locked_until = db.Column(db.DateTime)
     totp_secret = db.Column(db.String(64))
+    totp_last_step = db.Column(db.BigInteger)        # último intervalo de 30 s aceito: o mesmo código não vale duas vezes
     created_at = db.Column(db.DateTime, default=now, nullable=False)
     last_login_at = db.Column(db.DateTime)
 

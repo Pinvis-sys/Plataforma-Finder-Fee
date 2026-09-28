@@ -11,7 +11,7 @@ Python 3.12 · Flask · SQLite (piloto) · sem build de front-end.
 ```bash
 pip install -r requirements.txt
 export FLASK_APP=app:create_app
-flask init-db                       # cria o banco, as regras "Piloto v1" e os termos pendentes do jurídico
+flask init-db                       # cria ou atualiza o banco (migrações), as regras "Piloto v1" e os termos pendentes do jurídico
 flask create-user marco@alltargets.example "Marco" --roles admin,manager,commercial,finance
 flask run                           # http://127.0.0.1:5000
 ```
@@ -21,7 +21,7 @@ Para ver o sistema já com dados de exemplo (apenas em ambiente de teste):
 ```bash
 flask demo-data                     # gestor@demo.test / demo-senha-123 ; parceiro3@demo.test / senha-segura-123
 flask simulate-bonus                # confere a Camada 2 em banco temporário: R$ 34.560 + R$ 17.280 = 22,5%
-pytest -q                           # 111 testes (2 só rodam com PostgreSQL); também rodam no GitHub Actions a cada push
+pytest -q                           # 120 testes (3 só rodam com PostgreSQL); também rodam no GitHub Actions a cada push
 # contra PostgreSQL (banco descartável, é apagado a cada teste):
 FF_TEST_DATABASE_URL=postgresql+psycopg://usuario:senha@localhost/finder_fee_test pytest -q
 ```
@@ -56,6 +56,24 @@ Parceiros só enxergam os próprios dados. A empresa já indicada por outro parc
    apaga sessões vencidas e envia avisos por e-mail).
 5. Rotina semanal (segunda-feira): `flask weekly-report`, ou pelo botão em "Relatório semanal".
 6. **Backup** da pasta `instance/` (banco, NFs anexadas e relatórios) todos os dias.
+
+## Mudanças no banco (migrações)
+
+O esquema do banco é versionado com Alembic (Flask-Migrate), na pasta `migrations/`. `flask init-db` aplica as
+migrações pendentes e pode rodar a cada implantação (o `Dockerfile` já faz isso ao subir).
+
+- **Faça backup antes de atualizar** um banco com dados.
+- Banco criado antes das migrações (pelo `init-db` antigo): o `init-db` atual reconhece as tabelas que já existem,
+  cria as que faltam e aplica as mudanças de coluna, sem apagar dados.
+- Para mudar o esquema: altere o modelo em `app/models.py` e gere a migração:
+  ```bash
+  flask db migrate -m "o que mudou"      # cria migrations/versions/<id>_....py a partir da diferença
+  ```
+  Revise o arquivo gerado antes de commitar: renomeação de coluna, por exemplo, sai como "apaga e cria" e perderia
+  os dados. A migração não pode importar código do `app` (o teste `test_migracoes_nao_importam_o_app` confere).
+- `flask db current` mostra a versão do banco; `flask db downgrade` desfaz a última migração.
+- Os testes conferem que as migrações geram exatamente o esquema dos modelos, no SQLite e no PostgreSQL. Esquecer de
+  gerar a migração faz o CI falhar.
 
 ## Antes do primeiro parceiro (não é código)
 
@@ -94,7 +112,6 @@ a comissão só é gerada quando o cliente paga. Pagamento no mês seguinte ao r
 - Testado com SQLite e PostgreSQL 16: a suíte inteira, os comandos `flask`, o servidor gunicorn com 2 processos e envios
   simultâneos (mesma empresa: só um parceiro leva; empresas diferentes: todas gravadas). No PostgreSQL os códigos
   I-001/P01 podem pular números depois de um envio recusado; continuam únicos e estáveis.
-- Sem ferramenta de migração: `flask init-db` só cria tabelas novas. Mudança em coluna existente exige ajuste manual no banco.
 - Interface conferida em Chromium (desktop e celular). Safari e Firefox não foram testados.
 - E-mail testado contra servidor SMTP local (STARTTLS, SSL na 465, login, certificado inválido, endereço recusado,
   falha temporária). Ainda não foi testado com o provedor que será usado de verdade: antes de ligar, rode
@@ -111,6 +128,6 @@ a comissão só é gerada quando o cliente paga. Pagamento no mês seguinte ao r
 - Teste de intrusão (set/2026) contra o servidor local: controle de acesso entre parceiros e perfis, CSRF, injeção SQL,
   XSS, upload de NF, redirecionamento, sessão, força bruta e cabeçalhos. As falhas encontradas foram corrigidas e têm
   teste em `tests/test_seguranca.py`. Ainda vale uma revisão independente antes de abrir para parceiros.
-- O código de duas etapas pode ser reutilizado dentro da janela de 90 segundos em que é válido (exige também a senha).
+- O código de duas etapas vale uma vez só: depois de usado, o mesmo código (ou um anterior) é recusado.
 - Sem política de retenção/eliminação de dados (LGPD).
 - Feriados não vêm de fábrica e ainda não há campo na tela para cadastrá-los: hoje os prazos em dias úteis só descontam fins de semana. A lista fica em `holidays` (arquivo `app/rules.py`).

@@ -1,4 +1,5 @@
 """Regressões do teste de intrusão: redirecionamento, sessão, duas etapas, links e planilha."""
+import time
 from datetime import timedelta
 
 import pytest
@@ -143,8 +144,34 @@ def test_trocar_o_aplicativo_exige_o_codigo_atual(webapp):
     assert b"aplicativo atual incorreto" in r.data
     assert db.session.get(User, u.id).totp_secret == antigo
     r = c.post("/conta/2fa", data={"code": sec.totp_now(novo), "current_code": sec.totp_now(antigo)})
+    assert b"aplicativo atual incorreto" in r.data            # o código atual já foi usado no login
+    r = c.post("/conta/2fa", data={"code": sec.totp_now(novo), "current_code": sec.totp_now(antigo, time.time() + 30)})
     assert r.status_code == 302
     assert db.session.get(User, u.id).totp_secret == novo
+
+
+def test_codigo_de_duas_etapas_nao_vale_duas_vezes(webapp):
+    u = _staff_with_2fa()
+    code = sec.totp_now(u.totp_secret)
+    a, b = webapp.test_client(), webapp.test_client()
+    login(a, "s@t.test", "senha-longa-123")
+    assert a.post("/entrar/verificacao", data={"code": code}).status_code == 302
+    login(b, "s@t.test", "senha-longa-123")                          # quem viu o código tenta usar de novo
+    r = b.post("/entrar/verificacao", data={"code": code})
+    assert r.status_code == 200 and b"incorreto" in r.data
+    assert b.get("/gestao/").status_code == 302
+    r = b.post("/entrar/verificacao", data={"code": sec.totp_now(u.totp_secret, time.time() + 30)})
+    assert r.status_code == 302                                        # o código seguinte vale
+
+
+def test_codigo_de_intervalo_anterior_ao_ultimo_usado_e_recusado():
+    secret = sec.new_totp_secret()
+    t = 1_900_000_000
+    step = sec.match_totp(secret, sec.totp_now(secret, t), at=t)
+    assert step == t // 30
+    assert sec.match_totp(secret, sec.totp_now(secret, t), at=t, after_step=step) is None
+    assert sec.match_totp(secret, sec.totp_now(secret, t - 30), at=t, after_step=step) is None
+    assert sec.match_totp(secret, sec.totp_now(secret, t + 30), at=t, after_step=step) == step + 1
 
 
 def test_etapa_do_codigo_expira(webapp):
@@ -210,3 +237,18 @@ def test_texto_com_igual_nao_vira_formula_na_planilha(app, tmp_path):
     ws = load_workbook(ed.xlsx_path)["2 Funil de indicações"]
     cells = [c for row in ws.iter_rows() for c in row if isinstance(c.value, str) and c.value.startswith("=HYPERLINK")]
     assert cells and all(c.data_type == "s" for c in cells)
+
+
+def test_mesmo_intervalo_so_e_aceito_uma_vez_no_banco(webapp):
+    """Duas requisições com o mesmo código: as duas leem o valor antigo e o código confere para ambas,
+    mas só a primeira ganha o UPDATE condicional."""
+    u = _staff_with_2fa()
+    t = time.time()
+    code = sec.totp_now(u.totp_secret, t)
+    lido_antes = u.totp_last_step                 # o que a segunda requisição leu antes da primeira gravar
+    step = sec.match_totp(u.totp_secret, code, at=t, after_step=lido_antes)
+    assert sec.claim_totp_step(u, step)
+    db.session.commit()
+    assert sec.match_totp(u.totp_secret, code, at=t, after_step=lido_antes) == step   # leitura antiga deixaria passar
+    assert not sec.claim_totp_step(u, step)                                          # o banco não deixa
+    assert sec.claim_totp_step(u, step + 1)

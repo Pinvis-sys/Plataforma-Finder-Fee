@@ -118,7 +118,8 @@ def verify_2fa():
         if sec.ip_blocked():
             flash(IP_BLOCKED_MSG, "error")
             return render_template("verificacao.html"), 429
-        if sec.verify_totp(user.totp_secret, request.form.get("code", "")):
+        step = sec.match_totp(user.totp_secret, request.form.get("code", ""), after_step=user.totp_last_step)
+        if step is not None and sec.claim_totp_step(user, step):
             nxt = session.get("next")
             sec.login_user(user)
             user.failed_logins, user.locked_until = 0, None
@@ -214,11 +215,14 @@ def setup_2fa():
     secret = session.get("totp_setup") or sec.new_totp_secret()
     session["totp_setup"] = secret
     if request.method == "POST":
-        if u.totp_secret and not sec.verify_totp(u.totp_secret, request.form.get("current_code", "")):
+        current_step = (sec.match_totp(u.totp_secret, request.form.get("current_code", ""), after_step=u.totp_last_step)
+                        if u.totp_secret else None)
+        new_step = sec.match_totp(secret, request.form.get("code", ""))
+        if u.totp_secret and (current_step is None or not sec.claim_totp_step(u, current_step)):
             # trocar o aplicativo exige o código do atual: quem só roubou a sessão não consegue
             flash("Código do aplicativo atual incorreto.", "error")
-        elif sec.verify_totp(secret, request.form.get("code", "")):
-            u.totp_secret = secret
+        elif new_step is not None:
+            u.totp_secret, u.totp_last_step = secret, new_step
             sec.end_sessions(u)
             sec.login_user(u)
             db.session.commit()

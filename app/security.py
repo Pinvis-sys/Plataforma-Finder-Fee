@@ -33,10 +33,29 @@ def totp_now(secret: str, at: float | None = None) -> str:
     return _hotp(secret, int((at or time.time()) // 30))
 
 
-def verify_totp(secret: str, code: str, at: float | None = None) -> bool:
+def match_totp(secret: str, code: str, at: float | None = None, after_step: int | None = None) -> int | None:
+    """Intervalo de 30 s em que o código confere (tolera um intervalo de relógio para cada lado), ou None.
+    Com `after_step`, só aceita intervalos posteriores: um código já usado não entra de novo."""
     code = (code or "").strip().replace(" ", "")
     t = int((at or time.time()) // 30)
-    return any(hmac.compare_digest(_hotp(secret, t + d), code) for d in (-1, 0, 1))
+    for step in (t - 1, t, t + 1):
+        if hmac.compare_digest(_hotp(secret, step), code) and (after_step is None or step > after_step):
+            return step
+    return None
+
+
+def verify_totp(secret: str, code: str, at: float | None = None) -> bool:
+    return match_totp(secret, code, at) is not None
+
+
+def claim_totp_step(user: User, step: int) -> bool:
+    """Marca o intervalo como usado, só se for posterior ao último. É um UPDATE condicional: de duas
+    requisições simultâneas com o mesmo código, só uma consegue. Não faz commit."""
+    n = (User.query.filter(User.id == user.id, (User.totp_last_step.is_(None)) | (User.totp_last_step < step))
+         .update({"totp_last_step": step}, synchronize_session=False))
+    if n:
+        user.totp_last_step = step
+    return bool(n)
 
 
 def provisioning_uri(secret: str, email: str) -> str:

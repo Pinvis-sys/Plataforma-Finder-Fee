@@ -58,6 +58,13 @@ class Config:
     TESTING = False
 
 
+def render_migration_item(type_, obj, autogen_context):
+    """Autogeração de migrações: Money vira BigInteger, para a migração não depender do código do app."""
+    if type_ == "type" and isinstance(obj, Money):
+        return "sa.BigInteger()"
+    return False
+
+
 # --------------------------------------------------------------- formatação
 def brl(value) -> str:
     if value is None:
