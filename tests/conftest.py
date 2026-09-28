@@ -7,8 +7,13 @@ from app import create_app, seed
 from app.core import db
 
 
+# Por padrão os testes usam SQLite em memória. Para rodar contra PostgreSQL (banco descartável: é apagado a cada teste):
+#   FF_TEST_DATABASE_URL=postgresql+psycopg://usuario:senha@localhost/finder_fee_test pytest -q
+TEST_DB = os.environ.get("FF_TEST_DATABASE_URL", "sqlite:///:memory:")
+
+
 def _make(tmp_path, web):
-    return create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:", "TESTING_SKIP_CSRF": True,
+    return create_app({"TESTING": True, "SQLALCHEMY_DATABASE_URI": TEST_DB, "TESTING_SKIP_CSRF": True,
                        "UPLOAD_DIR": str(tmp_path / "uploads"), "REPORT_DIR": str(tmp_path / "reports"),
                        "SECRET_KEY": "teste"}, web=web)
 
