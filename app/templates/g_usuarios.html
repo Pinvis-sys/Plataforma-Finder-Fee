@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% block title %}Usuários internos{% endblock %}
+{% block h1 %}Usuários internos{% endblock %}
+{% block content %}
+<div class="panel"><h2>Novo usuário</h2>
+  <form method="post" class="stack"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="create">
+    <div class="row"><label>Nome<input type="text" name="name" required></label><label>E-mail<input type="email" name="email" required></label><label>Senha temporária<input type="password" name="password" required minlength="10"></label></div>
+    <div class="row">{% for r in roles %}<label class="check"><input type="checkbox" name="roles" value="{{ r }}"> {{ {'manager':'Gestor','commercial':'Comercial','finance':'Financeiro','admin':'Administrador'}[r] }}</label>{% endfor %}</div>
+    <button type="submit">Criar usuário</button></form></div>
+<div class="panel"><table><thead><tr><th>Nome</th><th>Perfis</th><th>Duas etapas</th><th>Acesso</th><th></th></tr></thead><tbody>
+  {% for u in users %}<tr><td>{{ u.name }}<br><span class="small muted">{{ u.email }}</span></td><td>{{ u.roles }}</td><td>{{ 'ativa' if u.totp_secret else '—' }}</td><td>{{ 'ativo' if u.active else 'desativado' }}</td>
+    <td><form method="post" class="inline-form"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="id" value="{{ u.id }}">
+      <input type="password" name="password" placeholder="Nova senha temporária" minlength="10" style="width:190px"><button name="action" value="reset" class="secondary" type="submit">Redefinir senha</button>
+      <button name="action" value="toggle" class="secondary" type="submit">{{ 'Desativar' if u.active else 'Reativar' }}</button></form></td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

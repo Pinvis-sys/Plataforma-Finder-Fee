@@ -1,0 +1,18 @@
+{% macro chip(label, tone='') %}<span class="chip {{ tone }}">{{ label }}</span>{% endmacro %}
+
+{% macro track(steps, mini=False) %}
+<ol class="track {{ 'mini' if mini }}" aria-label="Trajeto da indicação">
+  {% for s in steps %}
+  <li class="{{ s.state }}"{% if s.state == 'current' %} aria-current="step"{% endif %}>{{ s.label }}{% if s.note and not mini %}<small>{{ s.note }}</small>{% endif %}</li>
+  {% endfor %}
+</ol>
+{% endmacro %}
+
+{% macro csrf() %}<input type="hidden" name="_csrf" value="{{ csrf_token() }}">{% endmacro %}
+
+{% macro field(name, label, value='', type='text', required=False, hint='', attrs='') %}
+<label>{{ label }}{% if required %} *{% endif %}
+  <input type="{{ type }}" name="{{ name }}" value="{{ value }}" {{ 'required' if required }} {{ attrs|safe }}>
+  {% if hint %}<span class="hint">{{ hint }}</span>{% endif %}
+</label>
+{% endmacro %}

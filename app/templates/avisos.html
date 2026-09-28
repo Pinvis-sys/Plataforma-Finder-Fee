@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+{% block title %}Avisos{% endblock %}
+{% block h1 %}Avisos{% endblock %}
+{% block content %}
+<div class="panel">
+  {% if items %}<ul class="queue-list">
+    {% for n in items %}<li><span>{% if n.id in unread_ids %}<strong>{{ n.message }}</strong>{% else %}{{ n.message }}{% endif %}</span><span class="small muted">{{ n.created_at|dt(True) }}</span></li>{% endfor %}
+  </ul>{% else %}<p class="empty">Nenhum aviso por enquanto.</p>{% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% block title %}Verificação em duas etapas{% endblock %}
+{% block h1 %}Verificação em duas etapas{% endblock %}
+{% block sub %}Camada extra de segurança para o login com senha.{% endblock %}
+{% block content %}
+<div class="panel">
+  {% if ativo %}<p class="flash ok">A verificação em duas etapas já está ativa nesta conta. Refazer a configuração substitui o aplicativo atual.</p>{% endif %}
+  <p>1. No aplicativo autenticador (Google Authenticator, Microsoft Authenticator ou similar), adicione uma conta pela chave abaixo.</p>
+  <pre class="code">{{ secret }}</pre>
+  <p class="small muted">Endereço para apps que aceitam link: {{ uri }}</p>
+  <p>2. Digite o código de 6 dígitos que o aplicativo mostrar.</p>
+  <form method="post" class="stack">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    {% if ativo %}<label>Código do aplicativo atual <input type="text" name="current_code" inputmode="numeric" maxlength="7" required autocomplete="one-time-code"></label>{% endif %}
+    <label>Código{% if ativo %} do novo aplicativo{% endif %} <input type="text" name="code" inputmode="numeric" maxlength="7" required></label>
+    <button type="submit">Ativar verificação em duas etapas</button>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,8 @@
+{% extends 'public.html' %}
+{% block content %}
+<div class="panel">
+  <h1>{{ titulo }}</h1>
+  <p>{{ msg }}</p>
+  <p><a class="btn secondary" href="{{ url_for('auth.login') }}">Ir para o início</a></p>
+</div>
+{% endblock %}

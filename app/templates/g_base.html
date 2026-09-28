@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% block title %}Base comercial{% endblock %}
+{% block h1 %}Base comercial{% endblock %}
+{% block sub %}Clientes atuais e oportunidades abertas bloqueiam indicação. Contatos antigos vão para validação.{% endblock %}
+{% block content %}
+<div class="panel"><h2>Adicionar empresa</h2>
+  <form method="post" class="inline-form"><input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <label>CNPJ<input type="text" name="cnpj" required></label>
+    <label>Situação<select name="kind"><option value="cliente_atual">Cliente atual</option><option value="oportunidade_aberta">Oportunidade aberta</option><option value="contato_antigo">Contato antigo</option></select></label>
+    <label>Nota<input type="text" name="note"></label><button type="submit">Adicionar</button></form></div>
+<div class="panel"><table><thead><tr><th>CNPJ</th><th>Situação</th><th>Nota</th><th></th></tr></thead><tbody>
+  {% for i in items %}<tr><td>{{ i.cnpj|cnpj_fmt }}</td><td>{{ {'cliente_atual':'Cliente atual','oportunidade_aberta':'Oportunidade aberta','contato_antigo':'Contato antigo'}[i.kind] }}</td><td>{{ i.note or '' }}</td>
+    <td><form method="post" class="inline"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="del"><input type="hidden" name="id" value="{{ i.id }}"><button class="link" type="submit">Remover</button></form></td></tr>
+  {% else %}<tr><td colspan="4" class="empty">Base vazia. Cadastre os clientes atuais para evitar indicações duplicadas.</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% block title %}Regras e parâmetros{% endblock %}
+{% block h1 %}Regras e parâmetros{% endblock %}
+{% block sub %}Versão vigente: {{ cur.name }}. Cada indicação guarda a versão da data do aceite.{% endblock %}
+{% block content %}
+<div class="panel flat"><h2>Decisões ainda em aberto</h2>
+  <ul>{% for k, v in pending.items() %}<li><strong>{{ k }}</strong>: {{ v }}</li>{% endfor %}</ul></div>
+{% if is_admin %}
+<div class="panel"><h2>Criar nova versão</h2>
+  <p class="small muted">Mudar uma regra cria uma nova versão. As indicações já aceitas continuam valendo pela regra da data do aceite. O Piloto v1 fica preservado no histórico.</p>
+  <form method="post" class="stack"><input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <div class="grid2">
+    {% for key, label, kind in fields %}{% set v = rules[key] %}
+      <label>{{ label }}<input type="text" name="{{ key }}" value="{% if v is none %}{% elif kind.startswith('pct') %}{{ (v|float * 100)|round(2) }}{% else %}{{ v }}{% endif %}" {{ 'required' if not kind.endswith('?') }}></label>
+    {% endfor %}
+    <label>Impostos de referência (% do valor da NF)<input type="text" name="tax_total" value="{{ tax|round(2) }}"></label>
+    <label>Período do teto agregado<select name="aggregate_cap_period"><option value="quarter" {{ 'selected' if rules.aggregate_cap_period == 'quarter' }}>Trimestre</option><option value="year" {{ 'selected' if rules.aggregate_cap_period == 'year' }}>Ano</option></select></label>
+    <label>Duplicidade de indicação<select name="duplicate_scope"><option value="cnpj_base" {{ 'selected' if rules.duplicate_scope == 'cnpj_base' }}>Mesma empresa (matriz e filiais)</option><option value="cnpj" {{ 'selected' if rules.duplicate_scope == 'cnpj' }}>Só o mesmo CNPJ</option></select></label>
+    </div>
+    <label class="check"><input type="checkbox" name="window_end_inclusive" {{ 'checked' if rules.window_end_inclusive }}> A parcela que vence no aniversário de {{ rules.window_months }} meses conta</label>
+    <label class="check"><input type="checkbox" name="consent_required" {{ 'checked' if rules.consent_required }}> Exigir consentimento (LGPD) antes do contato comercial</label>
+    <label>Motivo da mudança *<input type="text" name="note" required></label>
+    <button type="submit">Criar nova versão</button>
+  </form></div>
+{% endif %}
+<div class="panel"><h2>Histórico de versões</h2>
+  <table><thead><tr><th>Versão</th><th>Criada em</th><th>Por</th><th>Motivo</th><th></th></tr></thead><tbody>
+  {% for v in versions %}<tr><td>{{ v.name }}</td><td>{{ v.created_at|dt(True) }}</td><td>{{ v.created_by }}</td><td class="small">{{ v.note or '' }}</td><td>{% if v.active %}<span class="chip ok">Vigente</span>{% endif %}{% if v.frozen %} <span class="chip info">Congelada</span>{% endif %}</td></tr>{% endfor %}
+  </tbody></table></div>
+{% endblock %}

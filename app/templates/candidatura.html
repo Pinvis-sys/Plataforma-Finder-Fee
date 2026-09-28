@@ -1,0 +1,48 @@
+{% extends 'public.html' %}
+{% from '_ui.html' import field %}
+{% block title %}Candidatura{% endblock %}
+{% block content %}
+<div class="panel">
+  <h1>Candidatura ao programa</h1>
+  {% if inviter %}
+    <p>Você foi convidado por <strong>{{ inviter.display_name }}</strong>. Antes de enviar, leia o aviso abaixo.</p>
+    <div class="notice">
+      <strong>Aviso sobre o bônus de expansão.</strong>
+      <p>Quando você fechar seu primeiro contrato por indicação, a All Targets paga um bônus adicional a quem convidou você. Esse bônus é custo da All Targets e não reduz a sua comissão.</p>
+    </div>
+  {% else %}
+    <p>Convite direto da All Targets. Preencha os dados da sua empresa. A análise leva até 5 dias úteis.</p>
+  {% endif %}
+  <form method="post" class="stack">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    {{ field('cnpj', 'CNPJ da empresa', form.get('cnpj',''), required=True, hint='Só pessoa jurídica com CNPJ ativo. MEI é aceito.') }}
+    {{ field('legal_name', 'Razão social', form.get('legal_name',''), required=True) }}
+    {{ field('trade_name', 'Nome fantasia', form.get('trade_name','')) }}
+    <label>Perfil de atuação
+      <select name="kind">{% for k, v in kinds.items() %}<option value="{{ k }}" {{ 'selected' if form.get('kind') == k }}>{{ v }}</option>{% endfor %}</select>
+    </label>
+    <div class="row">
+      {{ field('market_time', 'Tempo de mercado', form.get('market_time',''), hint='Ex.: 8 anos') }}
+      {{ field('company_size', 'Porte da empresa', form.get('company_size','')) }}
+    </div>
+    <label class="check"><input type="checkbox" name="is_mei" {{ 'checked' if form.get('is_mei') }}> Minha empresa é MEI</label>
+    {{ field('contact_name', 'Responsável', form.get('contact_name',''), required=True) }}
+    <div class="row">
+      {{ field('email', 'E-mail (será seu login)', form.get('email',''), 'email', True) }}
+      {{ field('phone', 'Telefone', form.get('phone','')) }}
+    </div>
+    <div class="row">
+      {{ field('city', 'Cidade', form.get('city','')) }}
+      {{ field('uf', 'UF', form.get('uf',''), attrs='maxlength="2"') }}
+    </div>
+    <div class="row">
+      {{ field('password', 'Crie uma senha', '', 'password', True, 'Ao menos 10 caracteres.') }}
+      {{ field('password2', 'Repita a senha', '', 'password', True) }}
+    </div>
+    {% if inviter %}
+    <label class="check"><input type="checkbox" name="accept_notice" required> Li e aceito o aviso sobre o bônus de expansão.</label>
+    {% endif %}
+    <button type="submit">Enviar candidatura</button>
+  </form>
+</div>
+{% endblock %}

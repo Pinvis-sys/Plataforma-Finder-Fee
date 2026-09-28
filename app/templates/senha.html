@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% block title %}Alterar senha{% endblock %}
+{% block h1 %}Alterar senha{% endblock %}
+{% block sub %}{% if me.must_change_password %}Defina uma nova senha para continuar.{% endif %}{% endblock %}
+{% block content %}
+<div class="panel">
+  <form method="post" class="stack">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <label>Senha atual <input type="password" name="current" required autocomplete="current-password"></label>
+    <label>Nova senha <input type="password" name="new" required minlength="10" autocomplete="new-password"><span class="hint">Ao menos 10 caracteres.</span></label>
+    <label>Repita a nova senha <input type="password" name="new2" required minlength="10" autocomplete="new-password"></label>
+    <button type="submit">Salvar nova senha</button>
+  </form>
+</div>
+{% endblock %}

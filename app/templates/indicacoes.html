@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% from '_ui.html' import track %}
+{% block title %}Minhas indicações{% endblock %}
+{% block h1 %}Minhas indicações{% endblock %}
+{% block sub %}Cada indicação mostra em que etapa está.{% endblock %}
+{% block content %}
+<p><a class="btn" href="{{ url_for('portal.indicacao_nova') }}">Indicar uma empresa</a></p>
+<div class="panel">
+  {% if refs %}
+  <div class="tablewrap"><table>
+    <thead><tr><th>Empresa</th><th>Registro</th><th>Situação</th><th>Etapa</th><th>Proteção</th></tr></thead>
+    <tbody>
+    {% for r in refs %}{% set st = ref_status(r) %}
+      <tr>
+        <td><a href="{{ url_for('portal.indicacao_detalhe', rid=r.id) }}">{{ r.company_name or r.cnpj }}</a><br><span class="small muted">{{ r.protocol }}</span></td>
+        <td>{{ r.created_at|dt }}</td>
+        <td><span class="chip {{ st[1] }}">{{ st[0] }}</span></td>
+        <td>{% if r.eligibility == 'aceita' and not r.waiting %}{{ STAGES[r.stage] }}{% else %}—{% endif %}</td>
+        <td>{% if r.eligibility == 'aceita' and r.waiting %}Mantida{% elif r.protection_until and r.eligibility == 'aceita' %}até {{ r.protection_until|dt }}{% else %}—{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% else %}<p class="empty">Nenhuma indicação registrada ainda.</p>{% endif %}
+</div>
+{% endblock %}

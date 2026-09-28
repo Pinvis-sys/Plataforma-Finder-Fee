@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+{% block title %}Seu acesso{% endblock %}
+{% block h1 %}Olá, {{ p.contact_name }}{% endblock %}
+{% block sub %}Acompanhe as etapas para liberar seu acesso ao programa.{% endblock %}
+{% block content %}
+{% if p.status in ('candidato', 'em_analise') %}
+<div class="panel flat">
+  <h2>Candidatura em análise</h2>
+  <p>Recebemos a candidatura de <strong>{{ p.display_name }}</strong> em {{ p.application_at|dt }}. A All Targets confirma o CNPJ, verifica conflito de interesse e responde em até 5 dias úteis.</p>
+</div>
+{% elif p.status == 'rejeitado' %}
+<div class="panel flat">
+  <h2>Candidatura não aprovada</h2>
+  <p>{{ p.reject_reason }}</p>
+</div>
+{% elif p.status == 'suspenso' %}
+<div class="panel flat"><h2>Acesso suspenso</h2><p>Fale com a All Targets para entender o motivo e os próximos passos.</p></div>
+{% elif p.status == 'aprovado' %}
+<div class="panel flat">
+  <h2>Candidatura aprovada</h2>
+  <p>Para liberar o portal falta:</p>
+  <ul>
+    <li>{% if p.workshop_at %}Workshop concluído em {{ p.workshop_at|dt }}.{% else %}Participar do workshop de 1 a 2 horas, obrigatório para todos. A All Targets entra em contato para agendar.{% endif %}</li>
+    <li>Ler e aceitar os termos abaixo.</li>
+  </ul>
+</div>
+<div class="panel">
+  <h2>Termos do programa</h2>
+  {% for d in docs %}
+    {% set done = (d.key, d.version) in accepted %}
+    <details style="margin-bottom:.8rem">
+      <summary><strong>{{ d.title }}</strong> {% if done %}<span class="chip ok">Aceito</span>{% elif not d.legal_approved %}<span class="chip wait">Ainda não liberado pelo jurídico</span>{% endif %}</summary>
+      <p style="white-space:pre-wrap;margin-top:.6rem">{{ d.body }}</p>
+      {% if not done and d.legal_approved %}
+      <form method="post" action="{{ url_for('portal.aceitar_termo', key=d.key) }}">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        <button type="submit">Li e aceito este termo</button>
+      </form>
+      {% endif %}
+    </details>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

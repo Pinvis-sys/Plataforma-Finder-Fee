@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% block title %}Relatório semanal{% endblock %}
+{% block h1 %}Relatório semanal do piloto{% endblock %}
+{% block sub %}Fecha no domingo às 23h59 e é emitido na segunda. Os arquivos usam códigos, sem nomes nem CNPJs.{% endblock %}
+{% block content %}
+<div class="panel"><h2>Critérios do piloto hoje</h2>
+  <div class="tablewrap"><table><thead><tr><th>Critério</th><th>Meta</th><th>Situação atual</th><th>Semáforo</th></tr></thead><tbody>
+  {% for c in crit %}<tr><td><strong>{{ c.criterio }}</strong><br><span class="small muted">{{ c.grupo }}</span></td><td class="small">{{ c.meta }}</td><td class="small">{{ c.valor }}</td>
+    <td><span class="semaforo {{ c.status }}"></span>{{ labels[c.status] }}</td></tr>{% endfor %}
+  </tbody></table></div></div>
+{% if me.has_role('manager') %}
+<div class="panel"><h2>Emitir edição</h2>
+  <form method="post" class="stack"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="generate">
+    <div class="row"><label>Domingo de fechamento<input type="date" name="week_end" value="{{ last.isoformat() }}"></label></div>
+    <label>Observações do gestor<textarea name="notes"></textarea></label>
+    <label class="check"><input type="checkbox" name="force"> Reemitir uma edição já existente (o retrato anterior será substituído)</label>
+    <button type="submit">Emitir relatório</button></form></div>
+<div class="panel"><h2>Parecer jurídico</h2>
+  <form method="post" class="inline-form"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="legal">
+    <label>Data do parecer de conformidade<input type="date" name="legal_date" value="{{ legal or '' }}"></label><button class="secondary" type="submit">Salvar</button></form>
+  <p class="small muted">Alimenta o critério eliminatório de conformidade jurídica.</p></div>
+{% endif %}
+<div class="panel"><h2>Edições emitidas</h2>
+  {% if eds %}<table><thead><tr><th>Edição</th><th>Período</th><th>Emitida em</th><th></th></tr></thead><tbody>
+  {% for e in eds %}<tr><td>{{ e.edition }}</td><td>{{ e.period_start|dt }} a {{ e.period_end|dt }}</td><td>{{ e.generated_at|dt(True) }}</td>
+    <td><a href="{{ url_for('manage.baixar_relatorio', eid=e.id, fmt='xlsx') }}">Planilha</a> · <a href="{{ url_for('manage.baixar_relatorio', eid=e.id, fmt='pdf') }}">PDF</a></td></tr>{% endfor %}
+  </tbody></table>{% else %}<p class="empty">Nenhuma edição emitida ainda.</p>{% endif %}</div>
+{% endblock %}

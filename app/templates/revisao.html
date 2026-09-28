@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% block title %}Solicitar revisão{% endblock %}
+{% block h1 %}Solicitar revisão{% endblock %}
+{% block sub %}A All Targets analisa e responde pelo portal.{% endblock %}
+{% block content %}
+<div class="panel">
+  <form method="post" class="stack">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    {% if ref %}<input type="hidden" name="indicacao" value="{{ ref.id }}"><p>Indicação {{ ref.protocol }}</p>{% else %}
+    <label>CNPJ da empresa <input type="text" name="cnpj" value="{{ cnpj }}"></label>{% endif %}
+    <label>O que deve ser revisado? *<textarea name="message" required></textarea>
+      <span class="hint">Explique por que você entende que a empresa deveria estar disponível ou a indicação aceita.</span></label>
+    <button type="submit">Enviar pedido de revisão</button>
+  </form>
+</div>
+{% endblock %}

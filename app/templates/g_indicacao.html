@@ -1,0 +1,102 @@
+{% extends 'base.html' %}
+{% from '_ui.html' import track %}
+{% block title %}{{ ref.code }}{% endblock %}
+{% block h1 %}{{ ref.code }} · {{ ref.company_name or ref.cnpj|cnpj_fmt }}{% endblock %}
+{% block sub %}Protocolo {{ ref.protocol }} · indicada por {{ ref.partner.code }} ({{ ref.partner.display_name }}) em {{ ref.created_at|dt(True) }}{% endblock %}
+{% block content %}
+<div class="panel"><h2>Trajeto</h2>{{ track(ref_track(ref)) }}</div>
+<div class="grid2">
+<div class="panel">
+  <h2>Dados da indicação</h2>
+  <dl class="kv">
+    <dt>CNPJ</dt><dd>{{ ref.cnpj|cnpj_fmt }}</dd>
+    <dt>Decisor</dt><dd>{{ ref.decisor_name }}{% if ref.decisor_role %}, {{ ref.decisor_role }}{% endif %}<br><span class="small muted">{{ ref.decisor_contact or '' }}</span></dd>
+    <dt>Sinal observado</dt><dd>{{ ref.signal }}</dd>
+    <dt>Interesse</dt><dd>{{ ref.interest or '—' }}</dd>
+    <dt>Relação</dt><dd>{{ ref.relationship or '—' }}</dd>
+    <dt>Elegibilidade</dt><dd><span class="chip">{{ ELIGIBILITY[ref.eligibility] }}</span> {% if ref.reject_reason %}{{ ref.reject_reason }}{% endif %}</dd>
+    {% if ref.old_contact_flag %}<dt>Alerta</dt><dd>Empresa consta como contato antigo na base comercial.</dd>{% endif %}
+    {% if ref.eligibility == 'aceita' %}
+      <dt>Regra congelada</dt><dd>{{ ref.rule_set.name if ref.rule_set else '—' }} (aceite em {{ ref.accepted_at|dt }})</dd>
+      <dt>Proteção</dt><dd>{% if ref.waiting %}Suspensa (em espera: {{ ref.waiting_reason }}){% else %}até {{ ref.protection_until|dt }}{% endif %}</dd>
+      <dt>Consentimento LGPD</dt><dd>{% if ref.consent_status == 'registrado' %}<span class="chip ok">Registrado</span> {{ ref.consent_evidence }}{% else %}<span class="chip wait">Pendente</span>{% endif %}</dd>
+    {% endif %}
+  </dl>
+</div>
+<div class="panel">
+  <h2>Decisão</h2>
+  {% if not can_edit %}<p class="muted">Seu perfil só consulta esta tela.</p>
+  {% elif ref.eligibility in ('recebida', 'em_validacao') %}
+  <form method="post" class="stack">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <label>Aderência à faixa-alvo e ao cliente ideal
+      <select name="fits_target"><option value="">Não avaliada</option><option value="sim">Aderente</option><option value="nao">Não aderente</option></select></label>
+    <label>Motivo (obrigatório para não aceitar; o parceiro verá)<textarea name="reason"></textarea></label>
+    <div class="row">
+      <button name="action" value="accept" type="submit">Aceitar indicação</button>
+      {% if ref.eligibility == 'recebida' %}<button name="action" value="start_review" class="secondary" type="submit">Marcar em validação</button>{% endif %}
+      <button name="action" value="reject" class="danger" type="submit">Não aceitar</button>
+    </div>
+  </form>
+  {% elif ref.eligibility == 'aceita' %}
+    {% if ref.waiting %}
+    <form method="post" class="stack"><input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <p>O parceiro vê "Aguardando início do atendimento".</p>
+      <label>Motivo para liberar mesmo com teto atingido (se aplicável)<input type="text" name="override_reason"></label>
+      <button name="action" value="start_service" type="submit">Iniciar atendimento</button></form>
+    {% else %}
+    {% if ref.consent_status != 'registrado' %}
+    <form method="post" class="stack"><input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <label>Como o consentimento do indicado foi registrado *<input type="text" name="evidence" placeholder="Ex.: aceite eletrônico em 10/03, e-mail do diretor" required></label>
+      <button name="action" value="consent" class="secondary" type="submit">Registrar consentimento</button></form><hr>
+    {% endif %}
+    {% if ref.stage not in ('ganha',) %}
+    <form method="post" class="stack"><input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <label>Etapa comercial<select name="stage">{% for k, v in STAGES.items() if k != 'ganha' %}<option value="{{ k }}" {{ 'selected' if ref.stage == k }}>{{ v }}</option>{% endfor %}</select></label>
+      <label>Próxima ação (o parceiro vê)<input type="text" name="next_action" value="{{ ref.next_action or '' }}"></label>
+      <label>Motivo da perda (se perdida)<input type="text" name="lost_reason" value="{{ ref.lost_reason or '' }}"></label>
+      <button name="action" value="stage" type="submit">Atualizar etapa</button></form><hr>
+    <form method="post" class="inline-form"><input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <label>Prorrogar proteção (dias)<input type="number" name="days" value="30" min="1" style="width:6rem"></label>
+      <label>Motivo<input type="text" name="reason" required></label>
+      <button name="action" value="extend" class="secondary" type="submit">Prorrogar</button></form>
+    {% endif %}{% endif %}
+  {% endif %}
+</div>
+</div>
+
+{% if can_edit and ref.eligibility == 'aceita' and not ref.waiting and not ref.contracts %}
+<div class="panel">
+  <h2>Registrar contrato assinado</h2>
+  <p class="small muted">Cada item vira parcelas. Retainer gera uma parcela por mês; parcelas com vencimento dentro da janela de {{ rules.window_months }} meses geram comissão.</p>
+  <form method="post" class="stack wide"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="contract">
+    <div class="row"><label>Produto contratado *<input type="text" name="product" required></label>
+      <label>Público<input type="text" name="audience" placeholder="opcional"></label>
+      <label>Data de assinatura *<input type="date" name="signed_at" required></label></div>
+    {% for i in (1, 2, 3) %}
+    <div class="row">
+      <label>Item {{ i }}<input type="text" name="i{{ i }}_desc" placeholder="Ex.: Setup, Retainer"></label>
+      <label>Tipo<select name="i{{ i }}_kind"><option value="evento_unico">Evento único</option><option value="retainer" {{ 'selected' if i == 2 }}>Retainer mensal</option></select></label>
+      <label>Valor bruto da parcela (R$)<input type="text" name="i{{ i }}_amount" inputmode="decimal"></label>
+      <label>1º vencimento<input type="date" name="i{{ i }}_due"></label>
+      <label>Nº de mensalidades<input type="number" name="i{{ i }}_months" min="1" value="12"></label>
+    </div>{% endfor %}
+    <div><button type="submit">Registrar contrato e gerar parcelas</button></div>
+  </form>
+</div>
+{% endif %}
+{% for c in ref.contracts %}
+<div class="panel"><h2>Contrato: {{ c.product }}</h2>
+  <p>Assinado em {{ c.signed_at|dt }} · {{ c.installments|length }} parcelas{% if c.first_for_recruited %} · <span class="chip info">gera bônus de expansão</span>{% endif %}{% if c.cancelled_at %} · <span class="chip bad">cancelado</span>{% endif %}</p>
+  <a class="btn secondary" href="{{ url_for('manage.contrato', cid=c.id) }}">Abrir parcelas e recebimentos</a></div>
+{% endfor %}
+
+{% if can_edit %}
+<div class="panel"><h2>Anotações internas</h2>
+  <form method="post" class="stack"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="flags">
+    <label>Aderência à faixa-alvo<select name="fits_target"><option value="">Não avaliada</option><option value="sim" {{ 'selected' if ref.fits_target is true }}>Aderente</option><option value="nao" {{ 'selected' if ref.fits_target is false }}>Não aderente</option></select></label>
+    <label class="check"><input type="checkbox" name="delayed_capacity" {{ 'checked' if ref.delayed_capacity }}> Atendimento atrasado por falta de capacidade dos sócios</label>
+    <label>Notas<textarea name="internal_notes">{{ ref.internal_notes or '' }}</textarea></label>
+    <button type="submit" class="secondary">Salvar anotações</button></form></div>
+{% endif %}
+{% endblock %}
