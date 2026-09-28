@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% from '_ui.html' import track %}
+{% block title %}{{ ref.protocol }}{% endblock %}
+{% block h1 %}{{ ref.company_name or 'Empresa indicada' }}{% endblock %}
+{% block sub %}Protocolo {{ ref.protocol }} · registrada em {{ ref.created_at|dt(True) }}{% endblock %}
+{% block content %}
+{% set st = ref_status(ref) %}
+<div class="panel">
+  <h2>Trajeto</h2>
+  {{ track(ref_track(ref)) }}
+</div>
+<div class="panel">
+  <h2>Situação</h2>
+  <dl class="kv">
+    <dt>Situação</dt><dd><span class="chip {{ st[1] }}">{{ st[0] }}</span></dd>
+    {% if ref.eligibility == 'rejeitada' %}<dt>Motivo</dt><dd>{{ ref.reject_reason }}</dd>{% endif %}
+    {% if ref.eligibility == 'aceita' and not ref.waiting %}
+      <dt>Etapa comercial</dt><dd>{{ STAGES[ref.stage] }} <span class="small muted">(atualizada em {{ ref.stage_updated_at|dt }})</span></dd>
+      <dt>Próxima ação</dt><dd>{{ ref.next_action or '—' }}</dd>
+      <dt>Proteção</dt><dd>{% if ref.stage == 'ganha' %}Contrato assinado{% else %}Protegida até {{ ref.protection_until|dt }}{% endif %}</dd>
+    {% elif ref.eligibility == 'aceita' %}
+      <dt>Proteção</dt><dd>Mantida. O atendimento começa assim que houver agenda.</dd>
+    {% elif ref.eligibility == 'expirada' %}<dt>Proteção</dt><dd>Encerrada sem contrato.</dd>{% endif %}
+    {% if ref.eligibility in ('recebida', 'em_validacao') %}<dt>Prazo de análise</dt><dd>Até 5 dias úteis após o registro.</dd>{% endif %}
+  </dl>
+</div>
+<div class="panel">
+  <h2>Dados registrados</h2>
+  <dl class="kv">
+    <dt>CNPJ</dt><dd>{{ ref.cnpj|cnpj_fmt }}</dd>
+    <dt>Decisor</dt><dd>{{ ref.decisor_name }}{% if ref.decisor_role %}, {{ ref.decisor_role }}{% endif %}</dd>
+    <dt>Sinal observado</dt><dd>{{ ref.signal }}</dd>
+    <dt>Interesse</dt><dd>{{ ref.interest or '—' }}</dd>
+  </dl>
+</div>
+{% if ref.eligibility in ('rejeitada', 'expirada') %}
+<p><a class="btn secondary" href="{{ url_for('portal.revisao', indicacao=ref.id) }}">Solicitar revisão</a></p>
+{% endif %}
+{% endblock %}

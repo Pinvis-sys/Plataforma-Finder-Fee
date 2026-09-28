@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% block title %}Indicações{% endblock %}
+{% block h1 %}Indicações{% endblock %}
+{% block content %}
+<p class="actions" style="gap:.5rem">
+  {% for k, v in [('abertas','A validar'),('atendimento','Em atendimento'),('espera','Em espera'),('rejeitada','Não aceitas'),('expirada','Expiradas'),('todas','Todas')] %}
+  <a class="btn {{ '' if flt == k else 'secondary' }}" href="{{ url_for('manage.indicacoes', f=k) }}">{{ v }}</a>{% endfor %}
+</p>
+<div class="panel"><div class="tablewrap"><table>
+  <thead><tr><th>Código</th><th>Empresa</th><th>Parceiro</th><th>Registro</th><th>Elegibilidade</th><th>Etapa</th></tr></thead>
+  <tbody>{% for r in refs %}<tr>
+    <td><a href="{{ url_for('manage.indicacao', rid=r.id) }}">{{ r.code }}</a></td>
+    <td>{{ r.company_name or '—' }}<br><span class="small muted">{{ r.cnpj|cnpj_fmt }}</span></td>
+    <td>{{ r.partner.code }} · {{ r.partner.display_name }}</td><td>{{ r.created_at|dt(True) }}</td>
+    <td><span class="chip">{{ ELIGIBILITY[r.eligibility] }}</span>{% if r.waiting %} <span class="chip wait">espera</span>{% endif %}{% if r.old_contact_flag %} <span class="chip info">contato antigo</span>{% endif %}</td>
+    <td>{{ STAGES[r.stage] if r.eligibility == 'aceita' else '—' }}</td></tr>
+  {% else %}<tr><td colspan="6" class="empty">Nada nesta lista.</td></tr>{% endfor %}</tbody>
+</table></div></div>
+{% endblock %}

@@ -1,0 +1,84 @@
+{% extends 'base.html' %}
+{% block title %}Comissões e pagamentos{% endblock %}
+{% block h1 %}Comissões e pagamentos{% endblock %}
+{% block sub %}Cada valor mostra como foi calculado, para você conferir.{% endblock %}
+{% block content %}
+{% for b in blocks %}<div class="flash warn" role="status">{{ b }} O pagamento só é liberado depois disso.</div>{% endfor %}
+
+{% if aprovadas %}
+<div class="panel flat">
+  <h2>Comissões aprovadas: envie a nota fiscal</h2>
+  <p>Emita a nota fiscal do serviço de intermediação para a All Targets, com o valor igual ao total das comissões selecionadas.
+    {% if deadline %}Notas enviadas depois do dia {{ deadline }} passam ao ciclo seguinte.{% endif %}</p>
+  <form method="post" action="{{ url_for('portal.enviar_nf') }}" enctype="multipart/form-data" class="stack wide">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <div class="tablewrap"><table>
+      <thead><tr><th></th><th>Tipo</th><th>Parcela</th><th class="num">Valor</th></tr></thead>
+      <tbody>{% for l in aprovadas %}
+        <tr><td><input type="checkbox" name="line_ids" value="{{ l.id }}" checked aria-label="Incluir"></td>
+          <td>{{ 'Bônus de expansão' if l.kind == 'bonus' else ('Ajuste' if l.kind == 'ajuste' else 'Comissão') }}</td>
+          <td>{{ l.detail.parcel if l.detail and l.detail.parcel else '—' }}</td><td class="num">{{ l.amount|brl }}</td></tr>
+      {% endfor %}</tbody>
+    </table></div>
+    <div class="row">
+      <label>Número da NF <input type="text" name="number" required></label>
+      <label>Data de emissão <input type="date" name="issue_date" required></label>
+      <label>Valor da NF (R$) <input type="text" name="value" required inputmode="decimal"></label>
+      <label>Arquivo (PDF ou XML) <input type="file" name="file" accept=".pdf,.xml,.png,.jpg,.jpeg"></label>
+    </div>
+    <div><button type="submit">Enviar nota fiscal</button></div>
+  </form>
+</div>
+{% endif %}
+
+<div class="panel">
+  <h2>Demonstrativo</h2>
+  {% if lines %}
+  <div class="tablewrap"><table>
+    <thead><tr><th>Tipo</th><th>Referente a</th><th>Como foi calculado</th><th>Estado</th><th>Pagamento</th><th class="num">Valor</th></tr></thead>
+    <tbody>
+    {% for l in lines %}
+      <tr>
+        <td>{{ 'Bônus de expansão' if l.kind == 'bonus' else ('Ajuste' if l.kind == 'ajuste' else 'Comissão') }}</td>
+        <td>{% if l.kind == 'cliente' and l.referral %}{{ l.referral.company_name or l.referral.cnpj|cnpj_fmt }}<br>{% endif %}
+            {% if l.kind == 'bonus' and l.source_partner %}Parceiro convidado {{ l.source_partner.code }}<br>{% endif %}
+            <span class="small muted">{{ l.detail.parcel if l.detail and l.detail.parcel else (l.note or '') }}</span></td>
+        <td class="small">
+          {% if l.kind == 'cliente' and l.detail %}
+            Recebido {{ l.detail.received|float|brl }} × (1 − impostos {{ l.detail.taxes|float|brl }} ÷ NF {{ l.detail.nf_value|float|brl }}) × {{ l.detail.pct|float|pct }}<br>
+            Base líquida {{ l.base_net|brl }} · janela de {{ l.detail.window_months }} meses
+          {% elif l.kind == 'bonus' %}{{ l.detail.pct|float|pct }} da comissão do parceiro convidado nesta parcela
+          {% else %}{{ l.note }}{% endif %}
+        </td>
+        <td><span class="chip {{ tone[l.state] }}" title="{{ help[l.state] }}">{{ FIN_STATES[l.state] if FIN_STATES is defined else l.state }}</span>
+          {% if l.hold_reason and l.state == 'aguardando_condicao' %}<br><span class="small muted">{{ l.hold_reason }}</span>{% endif %}</td>
+        <td>{% if l.paid_at %}{{ l.paid_at|dt }}{% elif l.cycle %}ciclo {{ l.cycle.strftime('%m/%Y') }}{% else %}—{% endif %}</td>
+        <td class="num">{{ l.amount|brl }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% else %}<p class="empty">Ainda não há comissões geradas. Elas surgem quando o cliente indicado paga uma parcela do contrato.</p>{% endif %}
+</div>
+
+<div class="panel">
+  <h2>Estimadas</h2>
+  <p class="small muted">Projeção das parcelas ainda não recebidas. Não é saldo disponível e muda conforme os recebimentos.</p>
+  {% if proj %}
+  <div class="tablewrap"><table>
+    <thead><tr><th>Vencimento da parcela</th><th>Referente a</th><th class="num">Comissão estimada</th></tr></thead>
+    <tbody>{% for x in proj[:24] %}<tr><td>{{ x.due|dt }}</td><td>{{ x.label }}{% if x.ref %} · {{ x.ref.company_name or x.ref.cnpj|cnpj_fmt }}{% endif %}</td><td class="num">{{ x.amount|brl }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+  {% else %}<p class="empty">Sem parcelas a receber no momento.</p>{% endif %}
+</div>
+
+<div class="panel">
+  <h2>Notas fiscais enviadas</h2>
+  {% if invoices %}<div class="tablewrap"><table>
+    <thead><tr><th>Número</th><th>Emissão</th><th>Situação</th><th class="num">Valor</th><th></th></tr></thead>
+    <tbody>{% for i in invoices %}<tr><td>{{ i.number }}</td><td>{{ i.issue_date|dt }}</td>
+      <td><span class="chip {{ 'ok' if i.status == 'conferida' else ('bad' if i.status == 'rejeitada' else 'wait') }}">{{ {'enviada':'Em conferência','conferida':'Conferida','rejeitada':'Recusada'}[i.status] }}</span>{% if i.reject_reason %}<br><span class="small">{{ i.reject_reason }}</span>{% endif %}</td>
+      <td class="num">{{ i.value|brl }}</td><td>{% if i.file_path %}<a href="{{ url_for('portal.baixar_nf', iid=i.id) }}">Baixar</a>{% endif %}</td></tr>{% endfor %}</tbody>
+  </table></div>{% else %}<p class="empty">Nenhuma nota enviada.</p>{% endif %}
+</div>
+{% endblock %}

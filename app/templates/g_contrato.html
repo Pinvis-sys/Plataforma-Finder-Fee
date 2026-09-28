@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block title %}Contrato{% endblock %}
+{% block h1 %}Contrato · {{ c.product }}{% endblock %}
+{% block sub %}{{ c.referral.code }} · {{ c.referral.company_name or c.referral.cnpj|cnpj_fmt }} · assinado em {{ c.signed_at|dt }}{% if c.cancelled_at %} · cancelado em {{ c.cancelled_at|dt }}{% endif %}{% endblock %}
+{% block content %}
+<div class="panel"><h2>Parcelas</h2>
+  <div class="tablewrap"><table><thead><tr><th>Parcela</th><th>Vencimento</th><th class="num">Valor bruto</th><th>Janela</th><th>Situação</th><th>Recebimentos</th>{% if can_fin %}<th>Registrar</th>{% endif %}</tr></thead><tbody>
+  {% for i in c.installments %}<tr>
+    <td>{{ i.description }} {{ i.number }}/{{ i.total }}</td><td>{{ i.due_date|dt }}</td><td class="num">{{ i.gross_amount|brl }}</td>
+    <td>{% if i.in_window %}<span class="chip ok">gera comissão</span>{% else %}<span class="chip">fora da janela</span>{% endif %}</td>
+    <td><span class="chip {{ 'ok' if i.status == 'recebida' else ('bad' if i.status == 'cancelada' else '') }}">{{ i.status }}</span></td>
+    <td class="small">{% for r in i.receipts %}{{ r.received_at|dt }}: {{ r.amount|brl }} (NF {{ r.nf_number }}, impostos {{ r.taxes|brl }})<br>{% endfor %}</td>
+    {% if can_fin %}<td>{% if i.status != 'cancelada' and not c.cancelled_at %}
+      <form method="post" class="inline-form"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="receipt"><input type="hidden" name="installment_id" value="{{ i.id }}">
+        <input type="date" name="received_at" required title="Data do recebimento"><input type="text" name="amount" placeholder="Valor recebido" required size="10">
+        <input type="text" name="nf_number" placeholder="NF" required size="7"><input type="text" name="nf_value" value="{{ '%.2f'|format(i.gross_amount)|replace('.', ',') }}" size="10" title="Valor da NF">
+        <input type="text" name="taxes" value="{{ '%.2f'|format(i.gross_amount * rate[i.id])|replace('.', ',') }}" size="9" title="Impostos da NF (confira na nota)"><button type="submit">Registrar</button></form>{% endif %}</td>{% endif %}
+  </tr>{% endfor %}</tbody></table></div>
+  <p class="small muted">Valor da NF e impostos vêm pré-preenchidos com a alíquota de referência. Confira e corrija conforme a nota emitida. Estorno: informe valor negativo.</p></div>
+{% if can_fin and not c.cancelled_at %}
+<div class="panel"><h2>Cancelar contrato</h2>
+  <form method="post" class="inline-form"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="cancel">
+    <label>Data<input type="date" name="when" required></label><label>Motivo *<input type="text" name="reason" required></label><button class="danger" type="submit">Cancelar contrato</button></form></div>
+{% endif %}
+<p><a href="{{ url_for('manage.indicacao', rid=c.referral_id) }}">Voltar à indicação</a></p>
+{% endblock %}

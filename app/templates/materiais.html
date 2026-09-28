@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% block title %}Materiais e regras{% endblock %}
+{% block h1 %}Materiais e regras{% endblock %}
+{% block sub %}O resumo de como o programa funciona e o playbook para reconhecer o sinal.{% endblock %}
+{% block content %}
+<div class="panel">
+  <h2>Como o programa remunera</h2>
+  <dl class="kv">
+    <dt>Comissão</dt><dd>{{ rules.commission_pct|float|pct }} da receita líquida do contrato (valor da NF sem impostos), sobre cada parcela recebida.</dd>
+    <dt>Janela</dt><dd>{{ rules.window_months }} meses a partir da assinatura. Parcela com vencimento dentro da janela conta, mesmo que o cliente pague depois.</dd>
+    <dt>Pagamento</dt><dd>No mês seguinte ao recebimento do cliente, contra a nota fiscal da sua empresa{% if rules.nf_deadline_day %} enviada até o dia {{ rules.nf_deadline_day }}{% endif %}.</dd>
+    <dt>Bônus de expansão</dt><dd>Se você convidar um parceiro, recebe {{ rules.bonus_pct|float|pct }} sobre cada parcela da comissão do primeiro contrato dele. Só o primeiro contrato, sem cascata.</dd>
+    <dt>Convites</dt><dd>Até {{ cap }} recrutamentos em {{ year }}.</dd>
+    <dt>Prioridade</dt><dd>Vale a primeira indicação registrada no portal, por data e hora.</dd>
+    <dt>Depois da janela</dt><dd>Sem remuneração obrigatória. A All Targets pode reconhecer contribuições tardias a seu critério, sem regra escrita.</dd>
+  </dl>
+</div>
+<div class="panel">
+  <h2>Playbook e materiais</h2>
+  {% if mats %}<ul class="queue-list">{% for m in mats %}<li><a href="{{ m.url }}" target="_blank" rel="noopener">{{ m.title }}</a><span class="chip">{{ {'video':'Vídeo','pdf':'PDF','link':'Link'}[m.kind] }}</span></li>{% endfor %}</ul>
+  {% else %}<p class="empty">Os materiais serão publicados pela All Targets.</p>{% endif %}
+</div>
+<div class="panel">
+  <h2>Termos aceitos</h2>
+  {% if accepted %}<ul class="queue-list">{% for a in accepted %}<li><span>{{ docs[a.term_key].title if a.term_key in docs else a.term_key }} (versão {{ a.version }})</span><span class="small muted">{{ a.accepted_at|dt }}</span></li>{% endfor %}</ul>
+  {% else %}<p class="empty">Nenhum termo aceito.</p>{% endif %}
+</div>
+{% endblock %}

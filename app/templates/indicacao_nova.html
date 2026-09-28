@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% from '_ui.html' import field %}
+{% block title %}Indicar uma empresa{% endblock %}
+{% block h1 %}Indicar uma empresa{% endblock %}
+{% block sub %}O primeiro registro no portal, por data e hora, é o que vale.{% endblock %}
+{% block content %}
+{% if stage == 'check' %}
+<div class="panel">
+  <h2>Primeiro, verifique se a empresa está disponível</h2>
+  {% if unavailable %}
+    <div class="flash warn" role="alert">{{ unavailable }}</div>
+    <p><a class="btn secondary" href="{{ url_for('portal.revisao', cnpj=cnpj) }}">Solicitar revisão</a></p>
+  {% endif %}
+  <form method="post" class="stack">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <input type="hidden" name="step" value="check">
+    {{ field('cnpj', 'CNPJ da empresa indicada', cnpj, required=True, hint='Matriz ou filial. Confirmamos a validade pelos dígitos verificadores.') }}
+    <button type="submit">Verificar empresa</button>
+  </form>
+</div>
+{% else %}
+<div class="panel">
+  <div class="flash ok">Empresa disponível: {{ cnpj }}</div>
+  <h2>Conte o que você observou</h2>
+  <form method="post" class="stack">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <input type="hidden" name="step" value="register">
+    <input type="hidden" name="cnpj" value="{{ cnpj }}">
+    {{ field('company_name', 'Nome da empresa', form.get('company_name',''), hint='Como você a conhece.') }}
+    <div class="row">
+      {{ field('decisor_name', 'Nome do decisor', form.get('decisor_name',''), required=True) }}
+      {{ field('decisor_role', 'Cargo', form.get('decisor_role','')) }}
+    </div>
+    {{ field('decisor_contact', 'Contato do decisor', form.get('decisor_contact',''), hint='E-mail ou telefone. A All Targets só fará contato depois de registrar o consentimento da empresa.') }}
+    <label>Sinal observado *
+      <textarea name="signal" required>{{ form.get('signal','') }}</textarea>
+      <span class="hint">O que chamou sua atenção? Ex.: financiamento no lugar de compra à vista, adiamento de investimento, conflito entre sócios.</span>
+    </label>
+    {{ field('interest', 'Necessidade ou serviço de interesse', form.get('interest','')) }}
+    {{ field('relationship', 'Sua relação com a empresa', form.get('relationship','')) }}
+    <button type="submit">Registrar indicação</button>
+  </form>
+</div>
+{% endif %}
+{% endblock %}

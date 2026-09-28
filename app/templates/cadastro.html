@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% block title %}Meu cadastro e suporte{% endblock %}
+{% block h1 %}Meu cadastro e suporte{% endblock %}
+{% block sub %}{{ p.display_name }} · {{ p.cnpj|cnpj_fmt }}{% endblock %}
+{% block content %}
+{% for b in blocks %}<div class="flash warn" role="status">{{ b }}</div>{% endfor %}
+<div class="panel">
+  <h2>Dados e conta bancária</h2>
+  <p class="small muted">A conta precisa estar no CNPJ da sua empresa. Ao alterar os dados bancários, a All Targets confere a titularidade de novo antes do próximo pagamento.</p>
+  <form method="post" class="stack">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <div class="row"><label>Responsável <input type="text" name="contact_name" value="{{ p.contact_name }}" required></label>
+      <label>Telefone <input type="text" name="phone" value="{{ p.phone or '' }}"></label></div>
+    <div class="row"><label>Cidade <input type="text" name="city" value="{{ p.city or '' }}"></label>
+      <label>UF <input type="text" name="uf" value="{{ p.uf or '' }}" maxlength="2"></label></div>
+    <div class="row">
+      <label>Banco <input type="text" name="bank" value="{{ p.bank or '' }}"></label>
+      <label>Agência <input type="text" name="bank_agency" value="{{ p.bank_agency or '' }}"></label>
+      <label>Conta <input type="text" name="bank_account" value="{{ p.bank_account or '' }}"></label>
+    </div>
+    <label>CNPJ do titular da conta <input type="text" name="bank_holder_doc" value="{{ p.bank_holder_doc|cnpj_fmt if p.bank_holder_doc else '' }}"></label>
+    <p class="small">Situação: CNPJ {{ 'confirmado' if p.cnpj_verified else 'em confirmação' }} · titularidade {{ 'conferida' if p.bank_verified else 'em conferência' }}</p>
+    <button type="submit">Salvar cadastro</button>
+  </form>
+</div>
+<div class="panel">
+  <h2>Pedidos de revisão</h2>
+  <p><a class="btn secondary" href="{{ url_for('portal.revisao') }}">Solicitar revisão</a></p>
+  {% if reviews %}<div class="tablewrap"><table><thead><tr><th>Enviado</th><th>Pedido</th><th>Resposta</th></tr></thead><tbody>
+    {% for r in reviews %}<tr><td>{{ r.created_at|dt }}</td><td>{{ r.message }}</td><td>{% if r.status == 'resolvido' %}{{ r.resolution }}{% else %}<span class="chip wait">Em análise</span>{% endif %}</td></tr>{% endfor %}
+  </tbody></table></div>{% else %}<p class="empty">Nenhum pedido.</p>{% endif %}
+</div>
+{% if not answered %}
+<div class="panel">
+  <h2>Como está sendo sua experiência?</h2>
+  <form method="post" action="{{ url_for('portal.pesquisa') }}" class="stack">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <label>Nota de 0 a 10 <input type="number" name="score" min="0" max="10" required style="max-width:6rem"></label>
+    <label class="check"><input type="checkbox" name="calc_doubt"> Tive dúvida sobre como as comissões são calculadas</label>
+    <label>Comentário <textarea name="comment"></textarea></label>
+    <button type="submit">Enviar avaliação</button>
+  </form>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+{% block title %}Financeiro{% endblock %}
+{% block h1 %}Financeiro{% endblock %}
+{% block sub %}Conferência, notas fiscais e pagamentos. Impostos são informados por NF, sem estimativa do sistema.{% endblock %}
+{% block content %}
+<div class="panel"><h2>Comissões aguardando conferência <span class="chip {{ 'wait' if q.aguardando_conferencia }}">{{ q.aguardando_conferencia|length }}</span></h2>
+  {% if q.aguardando_conferencia %}<div class="tablewrap"><table><thead><tr><th>Parceiro</th><th>Tipo</th><th>Referente a</th><th class="num">Valor</th><th>Situação</th><th></th></tr></thead><tbody>
+  {% for l in q.aguardando_conferencia %}<tr><td>{{ l.beneficiary.code }}</td><td>{{ 'Bônus' if l.kind == 'bonus' else 'Comissão' }}</td>
+    <td class="small">{{ l.detail.parcel if l.detail else '' }}<br>{% if l.receipt %}NF {{ l.receipt.nf_number }} · recebido em {{ l.receipt.received_at|dt }}{% endif %}</td>
+    <td class="num">{{ l.amount|brl }}</td><td class="small">{{ l.hold_reason }}</td>
+    <td><form method="post" action="{{ url_for('manage.linha', lid=l.id) }}" class="inline"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button name="action" value="approve" type="submit">Aprovar</button></form></td></tr>{% endfor %}
+  </tbody></table></div>{% else %}<p class="empty">Nada aguardando.</p>{% endif %}</div>
+
+<div class="panel"><h2>Notas fiscais para conferir <span class="chip {{ 'wait' if q.nfs_para_conferir }}">{{ q.nfs_para_conferir|length }}</span></h2>
+  {% for i in q.nfs_para_conferir %}
+  <div style="border-bottom:1px solid var(--cinza-claro);padding:.6rem 0">
+    <strong>{{ i.partner.code }} · NF {{ i.number }}</strong> · {{ i.value|brl }} · emitida em {{ i.issue_date|dt }} {% if i.file_path %}· <a href="{{ url_for('portal.baixar_nf', iid=i.id) }}">baixar arquivo</a>{% endif %}
+    <form method="post" action="{{ url_for('manage.nota', iid=i.id) }}" class="inline-form" style="margin-top:.4rem"><input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <button name="action" value="ok" type="submit">Conferida</button>
+      <input type="text" name="reason" placeholder="Motivo, se recusar"><button name="action" value="no" class="danger" type="submit">Recusar</button></form>
+  </div>{% else %}<p class="empty">Nenhuma nota pendente.</p>{% endfor %}</div>
+
+<div class="panel"><h2>Pagamentos programados</h2>
+  {% for (pid, cycle), ls in programadas.items() %}{% set part = partners[pid] %}
+  <div style="border-bottom:1px solid var(--cinza-claro);padding:.6rem 0">
+    <strong>{{ part.code }} · {{ part.display_name }}</strong> · ciclo {{ cycle.strftime('%m/%Y') }} · total {{ (ls|sum(attribute='amount'))|brl }}
+    <form method="post" action="{{ url_for('manage.pagar') }}" class="inline-form" style="margin-top:.4rem"><input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <input type="hidden" name="partner_id" value="{{ part.id }}"><input type="hidden" name="cycle" value="{{ cycle.isoformat() }}">
+      <input type="text" name="reference" placeholder="Referência do pagamento" required><button type="submit">Registrar pagamento</button></form>
+  </div>{% else %}<p class="empty">Nenhum pagamento programado.</p>{% endfor %}</div>
+
+<div class="panel"><h2>Contratos e recebimentos</h2>
+  {% if contracts %}<div class="tablewrap"><table><thead><tr><th>Indicação</th><th>Produto</th><th>Assinatura</th><th></th></tr></thead><tbody>
+  {% for c in contracts %}<tr><td>{{ c.referral.code }} · {{ c.referral.company_name or c.referral.cnpj|cnpj_fmt }}</td><td>{{ c.product }}</td><td>{{ c.signed_at|dt }}</td><td><a href="{{ url_for('manage.contrato', cid=c.id) }}">Registrar recebimentos</a></td></tr>{% endfor %}
+  </tbody></table></div>{% else %}<p class="empty">Nenhum contrato registrado.</p>{% endif %}</div>
+
+<div class="panel"><h2>Conferência contra a planilha (100% das parcelas)</h2>
+  <p class="small muted">Critério eliminatório do piloto: cada parcela calculada é conferida contra a planilha de controle.</p>
+  {% if recent %}<div class="tablewrap"><table><thead><tr><th>Linha</th><th>Parceiro</th><th>Tipo</th><th class="num">Valor</th><th>Estado</th><th>Conferência</th></tr></thead><tbody>
+  {% for l in recent %}<tr><td>{{ l.id }}</td><td>{{ l.beneficiary.code }}</td><td>{{ l.kind }}</td><td class="num">{{ l.amount|brl }}</td><td>{{ FIN_STATES[l.state] }}</td>
+    <td>{% if l.checked %}<span class="chip ok">Conferida</span>{% elif l.divergence_note %}<span class="chip bad">Divergência</span> <span class="small">{{ l.divergence_note }}</span>
+      {% else %}<form method="post" action="{{ url_for('manage.linha', lid=l.id) }}" class="inline-form"><input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        <button name="action" value="check" type="submit" class="secondary">Confere</button><input type="text" name="note" placeholder="Divergência"><button name="action" value="diverge" class="danger" type="submit">Registrar</button></form>{% endif %}</td></tr>{% endfor %}
+  </tbody></table></div>{% else %}<p class="empty">Sem linhas.</p>{% endif %}</div>
+
+<div class="panel"><h2>Ajuste manual</h2>
+  <form method="post" action="{{ url_for('manage.ajuste') }}" class="inline-form"><input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <label>Código do parceiro<select name="partner_id">{% for p in active_partners %}<option value="{{ p.id }}">{{ p.code }} · {{ p.display_name }}</option>{% endfor %}</select></label>
+    <label>Valor (negativo desconta)<input type="text" name="amount" required></label><label>Motivo *<input type="text" name="reason" required></label><button class="secondary" type="submit">Lançar ajuste</button></form></div>
+{% endblock %}

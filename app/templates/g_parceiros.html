@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% block title %}Parceiros{% endblock %}
+{% block h1 %}Parceiros{% endblock %}
+{% block sub %}Recrutamentos do piloto: {{ used }} de {{ limit }}.{% endblock %}
+{% block content %}
+<p><a class="btn" href="{{ url_for('manage.convites') }}">Convidar parceiro inicial</a></p>
+<div class="panel"><div class="tablewrap"><table>
+  <thead><tr><th>Código</th><th>Empresa</th><th>Perfil</th><th>Origem</th><th>Situação</th><th>CNPJ</th><th>Candidatura</th></tr></thead>
+  <tbody>{% for p in partners %}<tr>
+    <td><a href="{{ url_for('manage.parceiro', pid=p.id) }}">{{ p.code }}</a></td><td>{{ p.display_name }}</td>
+    <td>{{ PARTNER_KINDS.get(p.kind, p.kind) }} · Nível {{ p.level }}</td>
+    <td>{% if p.invited_by %}Recrutado por {{ p.invited_by.code }}{% else %}Inicial{% endif %}</td>
+    <td><span class="chip {{ 'ok' if p.status == 'ativo' else ('bad' if p.status in ('rejeitado','suspenso') else 'wait') }}">{{ PARTNER_STATUS[p.status] }}</span></td>
+    <td>{{ 'Confirmado' if p.cnpj_verified else 'A confirmar' }}</td><td>{{ p.application_at|dt }}</td></tr>
+  {% else %}<tr><td colspan="7" class="empty">Nenhum parceiro ainda. Crie um convite direto para começar.</td></tr>{% endfor %}</tbody>
+</table></div></div>
+{% endblock %}

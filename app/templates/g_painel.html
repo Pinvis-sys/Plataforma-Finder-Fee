@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+{% block title %}Painel de gestão{% endblock %}
+{% block h1 %}Painel de gestão{% endblock %}
+{% block sub %}O que precisa de decisão hoje. Regras em vigor: {{ rules.name }}.{% endblock %}
+{% set filas = [
+  ('indicacoes', 'Indicações sem validação', q.indicacoes_sem_validacao),
+  ('candidaturas', 'Candidaturas de parceiros', q.candidaturas),
+  ('revisoes', 'Pedidos de revisão', q.revisoes),
+  ('conferencia', 'Comissões aguardando conferência', q.aguardando_conferencia),
+  ('nfs', 'Notas fiscais de parceiros', q.nfs_para_conferir + q.nfs_pendentes),
+  ('atrasados', 'Pagamentos atrasados', q.pagamentos_atrasados),
+  ('protecoes', 'Proteções perto do vencimento', q.protecoes_proximas),
+  ('paradas', 'Oportunidades sem atualização', q.oportunidades_sem_atualizacao),
+  ('espera', 'Em espera (fila interna)', q.em_espera),
+  ('lgpd', 'Consentimento LGPD pendente', q.consentimento_pendente),
+  ('freq', 'Alerta de recorrência (Lei 4.886/65)', q.alertas_frequencia),
+] %}
+{% block content %}
+{% set com = filas|selectattr(2)|list %}
+{% set sem = filas|rejectattr(2)|list %}
+{% if not com %}<div class="panel flat"><h2>Tudo em dia</h2><p>Nenhuma fila com pendência agora.</p></div>{% endif %}
+<div class="grid2">
+{% for key, titulo, itens in com %}
+<div class="panel {{ 'flat' if key in ('indicacoes', 'candidaturas', 'atrasados') }}">
+  <h2>{{ titulo }} <span class="chip wait">{{ itens|length }}</span></h2>
+  <ul class="queue-list">
+  {% if key == 'indicacoes' %}{% for r in itens %}<li><a href="{{ url_for('manage.indicacao', rid=r.id) }}">{{ r.code }} · {{ r.company_name or r.cnpj|cnpj_fmt }}</a><span class="small muted">{{ r.created_at|dt }}</span></li>{% endfor %}
+  {% elif key == 'candidaturas' %}{% for p, dias, sla in itens %}<li><a href="{{ url_for('manage.parceiro', pid=p.id) }}">{{ p.code }} · {{ p.display_name }}</a><span class="chip {{ 'bad' if dias >= sla else ('wait' if dias >= sla - 1 else '') }}">{{ dias }} de {{ sla }} dias úteis</span></li>{% endfor %}
+  {% elif key == 'revisoes' %}{% for r in itens %}<li><div style="flex:1"><strong>{{ r.partner.code }}</strong> {{ r.message }}
+      <form method="post" action="{{ url_for('manage.revisao', rrid=r.id) }}" class="inline-form" style="margin-top:.4rem"><input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <input type="text" name="resolution" placeholder="Resposta ao parceiro" required style="min-width:220px"><button type="submit" class="secondary">Responder</button></form></div></li>{% endfor %}
+  {% elif key == 'conferencia' %}{% for l in itens[:8] %}<li><span>{{ l.beneficiary.code }} · {{ 'Bônus' if l.kind == 'bonus' else 'Comissão' }}</span><span>{{ l.amount|brl }}</span></li>{% endfor %}<li><a href="{{ url_for('manage.financeiro') }}">Abrir financeiro</a></li>
+  {% elif key == 'nfs' %}<li><span>Para conferir</span><strong>{{ q.nfs_para_conferir|length }}</strong></li><li><span>Aprovadas, aguardando o parceiro enviar a NF</span><strong>{{ q.nfs_pendentes|length }}</strong></li>
+  {% elif key == 'atrasados' %}{% for l in itens %}<li><span>{{ l.beneficiary.code }} · ciclo {{ l.cycle.strftime('%m/%Y') }}</span><span>{{ l.amount|brl }}</span></li>{% endfor %}
+  {% elif key == 'protecoes' %}{% for r in itens %}<li><a href="{{ url_for('manage.indicacao', rid=r.id) }}">{{ r.code }} · {{ r.company_name or r.cnpj|cnpj_fmt }}</a><span class="small">até {{ r.protection_until|dt }}</span></li>{% endfor %}
+  {% elif key == 'paradas' %}{% for r in itens %}<li><a href="{{ url_for('manage.indicacao', rid=r.id) }}">{{ r.code }} · {{ STAGES[r.stage] }}</a><span class="small muted">desde {{ r.stage_updated_at|dt }}</span></li>{% endfor %}
+  {% elif key == 'espera' %}{% for r in itens %}<li><a href="{{ url_for('manage.indicacao', rid=r.id) }}">{{ r.code }} · {{ r.company_name or r.cnpj|cnpj_fmt }}</a><span class="chip wait">{{ {'teto_parceiro':'Teto do parceiro','teto_agregado':'Teto agregado','capacidade':'Capacidade'}.get(r.waiting_reason, '') }}</span></li>{% endfor %}
+  {% elif key == 'lgpd' %}{% for r in itens %}<li><a href="{{ url_for('manage.indicacao', rid=r.id) }}">{{ r.code }} · {{ r.company_name or r.cnpj|cnpj_fmt }}</a></li>{% endfor %}
+  {% elif key == 'freq' %}{% for p, n in itens %}<li><a href="{{ url_for('manage.parceiro', pid=p.id) }}">{{ p.code }} · {{ p.display_name }}</a><span class="chip bad">{{ n }} aceitas em 12 meses</span></li>{% endfor %}
+  {% endif %}
+  </ul>
+</div>
+{% endfor %}
+</div>
+{% if sem %}<p class="small muted">Sem pendências: {{ sem|map(attribute=1)|join(', ')|lower }}.</p>{% endif %}
+{% endblock %}

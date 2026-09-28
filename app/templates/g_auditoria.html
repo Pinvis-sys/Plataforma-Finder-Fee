@@ -1,0 +1,9 @@
+{% extends 'base.html' %}
+{% block title %}Auditoria{% endblock %}
+{% block h1 %}Auditoria{% endblock %}
+{% block sub %}As 300 ações mais recentes. {% if me.has_role('admin') %}<a href="{{ url_for('manage.usuarios') }}">Gerenciar usuários internos</a>{% endif %}{% endblock %}
+{% block content %}
+<div class="panel"><div class="tablewrap"><table><thead><tr><th>Quando</th><th>Quem</th><th>Ação</th><th>Objeto</th><th>Detalhes</th></tr></thead><tbody>
+  {% for l in logs %}<tr><td>{{ l.at|dt(True) }}</td><td>{{ l.actor }}</td><td>{{ l.action }}</td><td>{{ l.entity or '' }} {{ l.entity_id or '' }}</td><td class="small">{{ l.details or '' }}</td></tr>{% endfor %}
+</tbody></table></div></div>
+{% endblock %}

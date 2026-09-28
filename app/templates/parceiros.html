@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% block title %}Convidar parceiro{% endblock %}
+{% block h1 %}Convidar parceiro{% endblock %}
+{% block sub %}Recrutamentos usados em {{ year }}: {{ used }} de {{ cap }}.{% endblock %}
+{% block content %}
+<div class="panel">
+  <h2>Seu link de convite</h2>
+  {% if open_ %}
+    <p>Envie este link a quem você quer convidar. Quem receber faz a candidatura, passa pela aprovação e pelo workshop como qualquer parceiro.</p>
+    <pre class="code">{{ link }}</pre>
+    <div class="notice"><strong>Como funciona o bônus.</strong>
+      <p>Quando o parceiro convidado fechar o primeiro contrato dele, você recebe um bônus sobre cada parcela dessa comissão. É custo adicional da All Targets e não reduz a comissão dele. O convidado vê esse aviso antes de concluir a candidatura.</p></div>
+  {% else %}
+    <p class="flash warn">{{ reason }}</p>
+  {% endif %}
+</div>
+<div class="panel">
+  <h2>Parceiros que você convidou</h2>
+  {% if rows %}
+  <div class="tablewrap"><table>
+    <thead><tr><th>Parceiro</th><th>Situação</th><th>Marcos</th></tr></thead>
+    <tbody>
+    {% for r, marcos in rows %}
+      <tr>
+        <td>{{ r.display_name }}<br><span class="small muted">convidado em {{ r.application_at|dt }}</span></td>
+        <td><span class="chip info">{{ PARTNER_STATUS[r.status] }}</span></td>
+        <td><ol class="track mini" aria-label="Marcos do parceiro convidado">
+          {% for label, done in marcos %}<li class="{{ 'done' if done else 'pending' }}">{{ label }}</li>{% endfor %}
+        </ol></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  <p class="small muted">Por sigilo, você não vê empresas indicadas, propostas nem valores de contrato do parceiro convidado.</p>
+  {% else %}<p class="empty">Você ainda não convidou ninguém.</p>{% endif %}
+</div>
+{% endblock %}

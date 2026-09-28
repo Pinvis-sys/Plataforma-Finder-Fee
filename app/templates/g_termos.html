@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+{% block title %}Termos e materiais{% endblock %}
+{% block h1 %}Termos e materiais{% endblock %}
+{% block sub %}O parceiro só aceita termos liberados pelo jurídico.{% endblock %}
+{% block content %}
+{% for d in docs %}
+<div class="panel"><h2>{{ d.title }} <span class="small muted">versão {{ d.version }}</span> {% if d.legal_approved %}<span class="chip ok">Liberado pelo jurídico</span>{% else %}<span class="chip wait">Aguardando jurídico</span>{% endif %}</h2>
+  <form method="post" class="stack wide"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="term"><input type="hidden" name="key" value="{{ d.key }}">
+    <textarea name="body" style="min-height:8rem" {{ 'readonly' if not me.has_role('admin') }}>{{ d.body }}</textarea>
+    {% if me.has_role('admin') %}<label class="check"><input type="checkbox" name="legal_approved" {{ 'checked' if d.legal_approved }}> Texto revisado e liberado pelo jurídico</label>
+    <p class="small muted">Alterar o texto cria uma nova versão e exige novo aceite dos parceiros.</p><div><button type="submit">Salvar termo</button></div>{% endif %}</form></div>
+{% endfor %}
+<div class="panel"><h2>Materiais do parceiro</h2>
+  <ul class="queue-list">{% for m in mats %}<li><span>{{ m.title }} <span class="small muted">{{ m.url }}</span></span>
+    <form method="post" class="inline"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="material_del"><input type="hidden" name="id" value="{{ m.id }}"><button class="link" type="submit">Remover</button></form></li>
+  {% else %}<li class="empty">Nenhum material publicado.</li>{% endfor %}</ul>
+  <form method="post" class="inline-form" style="margin-top:.8rem"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="material">
+    <label>Título<input type="text" name="title" required></label><label>Tipo<select name="kind"><option value="video">Vídeo</option><option value="pdf">PDF</option><option value="link">Link</option></select></label>
+    <label>Endereço<input type="url" name="url" required></label><label>Ordem<input type="number" name="position" value="0" style="width:5rem"></label><button class="secondary" type="submit">Publicar</button></form></div>
+{% endblock %}

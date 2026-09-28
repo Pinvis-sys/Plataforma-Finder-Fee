@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+{% block title %}{{ p.code }}{% endblock %}
+{% block h1 %}{{ p.code }} · {{ p.display_name }}{% endblock %}
+{% block sub %}{{ PARTNER_KINDS.get(p.kind, p.kind) }} · Nível {{ p.level }} · {{ PARTNER_STATUS[p.status] }}{% endblock %}
+{% block content %}
+<div class="grid2">
+<div class="panel"><h2>Cadastro</h2>
+  <dl class="kv">
+    <dt>CNPJ</dt><dd>{{ p.cnpj|cnpj_fmt }} {% if p.is_mei %}<span class="chip info">MEI</span>{% endif %}</dd>
+    <dt>Razão social</dt><dd>{{ p.legal_name }}</dd>
+    <dt>Responsável</dt><dd>{{ p.contact_name }}<br><span class="small muted">{{ p.email }} · {{ p.phone or '' }}</span></dd>
+    <dt>Local</dt><dd>{{ p.city or '—' }} {{ p.uf or '' }}</dd>
+    <dt>Tempo de mercado / porte</dt><dd>{{ p.market_time or '—' }} · {{ p.company_size or '—' }}</dd>
+    <dt>Origem</dt><dd>{% if p.invited_by %}Recrutado por {{ p.invited_by.code }} (aviso do bônus aceito em {{ p.bonus_notice_accepted_at|dt }}){% else %}Convite direto{% endif %}</dd>
+    <dt>Workshop</dt><dd>{{ p.workshop_at|dt if p.workshop_at else 'Pendente' }}</dd>
+    <dt>Banco</dt><dd>{{ p.bank or '—' }} {{ p.bank_agency or '' }} {{ p.bank_account or '' }}<br><span class="small muted">Titular: {{ p.bank_holder_doc|cnpj_fmt if p.bank_holder_doc else '—' }}</span></dd>
+  </dl>
+</div>
+<div class="panel"><h2>Análise e conformidade</h2>
+  {% if can_edit %}
+  <form method="post" class="inline-form"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="verify_cnpj">
+    <span>CNPJ ativo: <strong>{{ 'confirmado' if p.cnpj_verified else 'a confirmar' }}</strong></span>
+    {% if p.cnpj_verified %}<button class="secondary" type="submit">Desfazer</button>{% else %}<input type="hidden" name="value" value="1"><button type="submit">Confirmar situação ativa</button>{% endif %}</form>
+  {% if p.status in ('candidato', 'em_analise') %}
+  <hr>
+  <form method="post" class="stack"><input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <div class="row"><label>Nível<select name="level"><option value="1">Nível 1 (núcleo)</option><option value="2">Nível 2 (radar)</option><option value="3">Nível 3 (sem comissão direta)</option></select></label>
+      <label>Perfil<select name="kind">{% for k, v in PARTNER_KINDS.items() %}<option value="{{ k }}" {{ 'selected' if p.kind == k }}>{{ v }}</option>{% endfor %}</select></label></div>
+    <label>Motivo (obrigatório para não aprovar)<textarea name="reason"></textarea></label>
+    <div class="row"><button name="action" value="approve" type="submit">Aprovar</button><button name="action" value="reject" class="danger" type="submit">Não aprovar</button></div>
+  </form>
+  {% endif %}
+  {% if p.status == 'aprovado' and not p.workshop_at %}<hr><form method="post"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button name="action" value="workshop" type="submit">Registrar workshop concluído</button></form>{% endif %}
+  <hr>
+  <form method="post" class="stack"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="conflict">
+    <label>Conflito de interesse (anotação interna)<textarea name="conflict_notes">{{ p.conflict_notes or '' }}</textarea></label><button class="secondary" type="submit">Salvar anotação</button></form>
+  {% if p.status == 'ativo' %}<hr><form method="post" class="inline-form"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="suspend"><input type="text" name="reason" placeholder="Motivo" required><button class="danger" type="submit">Suspender</button></form>
+  {% elif p.status == 'suspenso' %}<hr><form method="post"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="reactivate"><button type="submit">Reativar</button></form>{% endif %}
+  {% else %}<p class="muted">Seu perfil só consulta.</p>{% endif %}
+  {% if can_fin and p.bank_holder_doc %}<hr>
+  <form method="post" class="inline-form"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="bank">
+    <span>Titularidade: <strong>{{ 'conferida' if p.bank_verified else 'a conferir' }}</strong></span>{% if not p.bank_verified %}<input type="hidden" name="value" value="1"><button type="submit">Marcar conta conferida</button>{% else %}<button class="secondary" type="submit">Desfazer</button>{% endif %}</form>{% endif %}
+</div>
+</div>
+<div class="panel"><h2>Indicações</h2>
+  {% if refs %}<div class="tablewrap"><table><thead><tr><th>Código</th><th>Empresa</th><th>Situação</th><th>Etapa</th></tr></thead><tbody>
+  {% for r in refs %}<tr><td><a href="{{ url_for('manage.indicacao', rid=r.id) }}">{{ r.code }}</a></td><td>{{ r.company_name or r.cnpj|cnpj_fmt }}</td><td>{{ ELIGIBILITY[r.eligibility] }}</td><td>{{ STAGES[r.stage] }}</td></tr>{% endfor %}
+  </tbody></table></div>{% else %}<p class="empty">Sem indicações.</p>{% endif %}
+  {% if recruited %}<h3 style="margin-top:1rem">Parceiros recrutados</h3><ul>{% for r in recruited %}<li><a href="{{ url_for('manage.parceiro', pid=r.id) }}">{{ r.code }} · {{ r.display_name }}</a> ({{ PARTNER_STATUS[r.status] }})</li>{% endfor %}</ul>{% endif %}
+</div>
+{% if can_edit %}<div class="panel"><h2>Corrigir vínculo de convite</h2><p class="small muted">Use quando o parceiro se cadastrou sem o link. Exige evidência e fica na auditoria.</p>
+  <form method="post" class="inline-form"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="link">
+    <label>Código de quem convidou (vazio = convite direto)<input type="text" name="inviter" placeholder="P01"></label><label>Evidência *<input type="text" name="reason" required></label><button class="secondary" type="submit">Corrigir vínculo</button></form></div>{% endif %}
+{% endblock %}

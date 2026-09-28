@@ -1,0 +1,14 @@
+{% extends 'public.html' %}
+{% block title %}Entrar{% endblock %}
+{% block content %}
+<div class="panel" style="max-width:440px">
+  <h1>Entrar</h1>
+  <p class="muted">Acesso ao portal do Programa Finder Fee. A candidatura é feita por convite.</p>
+  <form method="post" class="stack">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <label>E-mail <input type="email" name="email" required autocomplete="username" autofocus></label>
+    <label>Senha <input type="password" name="password" required autocomplete="current-password"></label>
+    <button type="submit">Entrar</button>
+  </form>
+</div>
+{% endblock %}

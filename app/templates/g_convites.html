@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% block title %}Convites diretos{% endblock %}
+{% block h1 %}Convites diretos{% endblock %}
+{% block sub %}Para os parceiros iniciais do piloto. Cada link vale para uma candidatura.{% endblock %}
+{% block content %}
+<div class="panel"><form method="post" class="inline-form"><input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+  <label>Identificação do convidado<input type="text" name="note" placeholder="Ex.: Prof. Fulano (MBA)" style="min-width:260px"></label><button type="submit">Criar convite</button></form></div>
+<div class="panel"><div class="tablewrap"><table>
+  <thead><tr><th>Convidado</th><th>Link</th><th>Situação</th></tr></thead>
+  <tbody>{% for i in invites %}<tr><td>{{ i.note or '—' }}<br><span class="small muted">{{ i.created_at|dt }}</span></td>
+    <td class="small">{{ base }}/convite-direto/{{ i.token }}</td>
+    <td>{% if i.used_at %}<span class="chip ok">Usado em {{ i.used_at|dt }}</span>{% else %}<span class="chip wait">Disponível</span>{% endif %}</td></tr>
+  {% else %}<tr><td colspan="3" class="empty">Nenhum convite criado.</td></tr>{% endfor %}</tbody>
+</table></div></div>
+{% endblock %}
