@@ -351,6 +351,10 @@ def _write_xlsx(path: str, data: dict, edition: str, end: date):
             c.font, c.fill = head, fill
         for row in sec["rows"]:
             s.append(row)
+            for c in s[s.max_row]:
+                # texto começando com "=" viraria fórmula no Excel (texto digitado pode vir do parceiro)
+                if isinstance(c.value, str) and c.value.startswith("="):
+                    c.data_type = "s"
         s.freeze_panes = "A2"
         for i, h in enumerate(sec["headers"], start=1):
             width = max([len(str(h))] + [len(str(r[i - 1])) for r in sec["rows"] if len(r) >= i] + [10])

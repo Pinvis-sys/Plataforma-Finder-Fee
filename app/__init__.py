@@ -34,7 +34,8 @@ def create_app(config: dict | None = None, web: bool = True) -> Flask:
 
     from . import cnpj as _cn
     app.jinja_env.filters.update(brl=core.brl, pct=core.pct, dt=core.dt, cnpj_fmt=_cn.fmt)
-    app.jinja_env.globals.update(brl=core.brl, pct=core.pct, dt=core.dt)
+    from .services import is_web_link
+    app.jinja_env.globals.update(brl=core.brl, pct=core.pct, dt=core.dt, is_web_link=is_web_link)
 
     if web:
         from .web import register_web

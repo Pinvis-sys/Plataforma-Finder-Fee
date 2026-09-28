@@ -399,6 +399,16 @@ class LoginAttempt(db.Model):
     at = db.Column(db.DateTime, default=now, nullable=False, index=True)
 
 
+class UserSession(db.Model):
+    """Sessão aberta. O cookie leva só o token; sair, trocar a senha ou desativar o usuário apaga a linha."""
+    __tablename__ = "user_session"
+    id = db.Column(db.Integer, primary_key=True)
+    token_hash = db.Column(db.String(64), unique=True, nullable=False)   # sha256 do token do cookie
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, index=True)
+    created_at = db.Column(db.DateTime, default=now, nullable=False)
+    last_seen_at = db.Column(db.DateTime, default=now, nullable=False, index=True)
+
+
 class ReportEdition(db.Model):
     __tablename__ = "report_edition"
     id = db.Column(db.Integer, primary_key=True)

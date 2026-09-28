@@ -11,7 +11,8 @@
   <p>2. Digite o código de 6 dígitos que o aplicativo mostrar.</p>
   <form method="post" class="stack">
     <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
-    <label>Código <input type="text" name="code" inputmode="numeric" maxlength="7" required></label>
+    {% if ativo %}<label>Código do aplicativo atual <input type="text" name="current_code" inputmode="numeric" maxlength="7" required autocomplete="one-time-code"></label>{% endif %}
+    <label>Código{% if ativo %} do novo aplicativo{% endif %} <input type="text" name="code" inputmode="numeric" maxlength="7" required></label>
     <button type="submit">Ativar verificação em duas etapas</button>
   </form>
 </div>

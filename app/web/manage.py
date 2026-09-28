@@ -441,7 +441,10 @@ def termos():
                 db.session.commit()
                 ok(f"Termo salvo (versão {d.version}).")
             elif f.get("action") == "material":
-                db.session.add(Material(title=f.get("title", "").strip(), kind=f.get("kind", "link"), url=f.get("url", "").strip(),
+                url = f.get("url", "").strip()
+                if not svc.is_web_link(url):
+                    raise svc.ServiceError("O endereço do material precisa começar com https:// ou http://.")
+                db.session.add(Material(title=f.get("title", "").strip(), kind=f.get("kind", "link"), url=url,
                                         position=int(f.get("position") or 0)))
                 db.session.commit()
                 ok("Material publicado.")
@@ -520,6 +523,7 @@ def usuarios():
                     raise svc.ServiceError("A senha temporária precisa ter ao menos 10 caracteres.")
                 u.set_password(f["password"])
                 u.must_change_password, u.failed_logins, u.locked_until = True, 0, None
+                sec.end_sessions(u)
                 svc.audit(actor(), "user.reset_password", "user", u.id)
                 db.session.commit()
                 ok("Senha temporária definida.")
@@ -528,6 +532,8 @@ def usuarios():
                 if u.id == sec.current_user().id:
                     raise svc.ServiceError("Você não pode desativar o próprio acesso.")
                 u.active = not u.active
+                if not u.active:
+                    sec.end_sessions(u)
                 svc.audit(actor(), "user.toggle", "user", u.id, active=u.active)
                 db.session.commit()
                 ok("Acesso atualizado.")

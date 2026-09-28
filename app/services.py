@@ -129,6 +129,16 @@ def _code_for(prefix: str, row_id: int, width: int) -> str:
     return f"{prefix}{row_id:0{width}d}"
 
 
+def is_web_link(url: str | None) -> bool:
+    """Link que pode ir para um href: só http(s). Barra javascript:, data: e afins."""
+    from urllib.parse import urlsplit
+    u = (url or "").strip()
+    if any(ord(ch) < 32 for ch in u):
+        return False
+    parts = urlsplit(u)
+    return parts.scheme.lower() in ("http", "https") and bool(parts.netloc)
+
+
 def rules_now() -> dict:
     return active_ruleset().rules
 
@@ -912,5 +922,6 @@ def manager_queues(on: date | None = None) -> dict:
 
 
 def run_daily_jobs() -> dict:
-    from .security import prune_login_attempts
-    return {"expiradas": expire_protections(), "tentativas_removidas": prune_login_attempts()}
+    from .security import prune_login_attempts, prune_sessions
+    return {"expiradas": expire_protections(), "tentativas_removidas": prune_login_attempts(),
+            "sessoes_encerradas": prune_sessions()}

@@ -1,9 +1,12 @@
 """Entrada, convites, senha e verificação em duas etapas."""
 from __future__ import annotations
 
+import secrets
 from datetime import timedelta
+from urllib.parse import urlsplit
 
 from flask import (Blueprint, current_app, flash, redirect, render_template, request, session, url_for)
+from werkzeug.security import check_password_hash, generate_password_hash
 
 from .. import security as sec
 from .. import services as svc
@@ -21,9 +24,22 @@ def _home(user: User):
 
 
 def _safe_next(target: str | None) -> str | None:
-    if target and target.startswith("/") and not target.startswith("//"):
-        return target
-    return None
+    """Só caminhos deste site. Barra '//host', barra invertida e caracteres de controle: o navegador
+    descarta tabulação e quebra de linha, e um caminho com tabulação entre as barras vira '//host'."""
+    if not target or not target.startswith("/") or "\\" in target:
+        return None
+    if any(ord(ch) < 32 or ord(ch) == 127 for ch in target):
+        return None
+    parts = urlsplit(target)
+    if target.startswith("//") or parts.scheme or parts.netloc:
+        return None
+    return target
+
+
+# Hash de uma senha qualquer: e-mail inexistente também paga o custo da verificação,
+# para o tempo de resposta não revelar quais e-mails têm conta.
+_DUMMY_HASH = generate_password_hash(secrets.token_hex(16))
+PENDING_2FA_MINUTES = 5
 
 
 IP_BLOCKED_MSG = "Muitas tentativas incorretas a partir desta rede. Aguarde alguns minutos e tente novamente."
@@ -39,6 +55,13 @@ def _count_failure(user: User | None, kind: str):
             user.locked_until = now() + timedelta(minutes=cfg["LOCK_MINUTES"])
             user.failed_logins = 0
     db.session.commit()
+
+
+def _password_ok(user: User | None, pw: str) -> bool:
+    if user is None:
+        check_password_hash(_DUMMY_HASH, pw)
+        return False
+    return user.check_password(pw) and user.active
 
 
 def _locked(user: User | None) -> bool:
@@ -60,11 +83,12 @@ def login():
             sec.record_failed_attempt("senha")
             db.session.commit()
             flash("Acesso temporariamente bloqueado por tentativas incorretas. Tente novamente em alguns minutos.", "error")
-        elif user and user.active and user.check_password(pw):
+        elif _password_ok(user, pw):
             if user.totp_secret:
                 # o contador da conta só zera depois do segundo fator
                 session.clear()
                 session["pending_uid"] = user.id
+                session["pending_at"] = now().timestamp()
                 session["next"] = _safe_next(request.args.get("next")) or ""
                 return redirect(url_for("auth.verify_2fa"))
             user.failed_logins, user.locked_until = 0, None
@@ -82,7 +106,9 @@ def login():
 def verify_2fa():
     uid = session.get("pending_uid")
     user = db.session.get(User, uid) if uid else None
-    if not user or not user.active:
+    started = session.get("pending_at") or 0
+    if not user or not user.active or now().timestamp() - started > PENDING_2FA_MINUTES * 60:
+        session.clear()
         return redirect(url_for("auth.login"))
     if _locked(user):
         session.clear()
@@ -173,6 +199,8 @@ def change_password():
         else:
             u.set_password(f["new"])
             u.must_change_password = False
+            sec.end_sessions(u)
+            sec.login_user(u)          # sessão nova: nenhum cookie anterior continua valendo
             db.session.commit()
             flash("Senha alterada.", "ok")
             return redirect(_home(u))
@@ -186,10 +214,14 @@ def setup_2fa():
     secret = session.get("totp_setup") or sec.new_totp_secret()
     session["totp_setup"] = secret
     if request.method == "POST":
-        if sec.verify_totp(secret, request.form.get("code", "")):
+        if u.totp_secret and not sec.verify_totp(u.totp_secret, request.form.get("current_code", "")):
+            # trocar o aplicativo exige o código do atual: quem só roubou a sessão não consegue
+            flash("Código do aplicativo atual incorreto.", "error")
+        elif sec.verify_totp(secret, request.form.get("code", "")):
             u.totp_secret = secret
+            sec.end_sessions(u)
+            sec.login_user(u)
             db.session.commit()
-            session.pop("totp_setup", None)
             flash("Verificação em duas etapas ativada.", "ok")
             return redirect(_home(u))
         flash("Código incorreto. Confira o horário do celular e tente de novo.", "error")

@@ -13,7 +13,7 @@ from datetime import timedelta
 from flask import abort, current_app, flash, g, redirect, request, session, url_for
 
 from .core import db, now
-from .models import LoginAttempt, User
+from .models import LoginAttempt, User, UserSession
 
 
 # ----------------------------------------------------------------- TOTP (RFC 6238)
@@ -67,34 +67,91 @@ def prune_login_attempts(older_than: timedelta = timedelta(days=1)) -> int:
 
 
 # ----------------------------------------------------------------- sessão
+# O cookie assinado do Flask não pode ser revogado. Por isso ele leva só um token aleatório, e a sessão
+# vale enquanto existir a linha correspondente em `user_session`.
+_TOUCH_EVERY = timedelta(minutes=1)      # atualiza o "visto por último" no máximo uma vez por minuto
+
+
+def _token_hash(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def _session_row() -> UserSession | None:
+    token = session.get("sid")
+    if not isinstance(token, str) or not token:
+        return None
+    row = UserSession.query.filter_by(token_hash=_token_hash(token)).first()
+    if row is None:
+        return None
+    cfg, t = current_app.config, now()
+    if (t - row.last_seen_at > timedelta(minutes=cfg["SESSION_IDLE_MINUTES"])
+            or t - row.created_at > timedelta(hours=cfg["SESSION_MAX_HOURS"])):
+        db.session.delete(row)
+        db.session.commit()
+        return None
+    if t - row.last_seen_at > _TOUCH_EVERY:
+        row.last_seen_at = t
+        db.session.commit()
+    return row
+
+
 def current_user() -> User | None:
     """Usuário da requisição. O cache fica no ambiente da requisição (não em `g`), para nunca
     vazar entre requisições quando existe um contexto de aplicação mais externo (testes, CLI)."""
     env = request.environ
     if "ff.user" not in env:
-        uid = session.get("uid")
-        user = db.session.get(User, uid) if uid else None
+        row = _session_row()
+        user = db.session.get(User, row.user_id) if row else None
         env["ff.user"] = user if user is not None and user.active else None
     return env["ff.user"]
 
 
 def login_user(user: User):
+    """Abre a sessão. Não faz commit: quem chama grava junto com o restante do login."""
     request.environ.pop("ff.user", None)
     session.clear()
-    session["uid"] = user.id
+    token = secrets.token_urlsafe(32)
+    db.session.add(UserSession(token_hash=_token_hash(token), user_id=user.id))
+    session["sid"] = token
     session["csrf"] = secrets.token_hex(16)
     session.permanent = False
 
 
 def logout_user():
+    token = session.get("sid")
+    if isinstance(token, str) and token:
+        UserSession.query.filter_by(token_hash=_token_hash(token)).delete(synchronize_session=False)
+        db.session.commit()
     request.environ.pop("ff.user", None)
     session.clear()
+
+
+def end_sessions(user: User) -> int:
+    """Encerra todas as sessões do usuário (troca de senha ou de aplicativo, senha redefinida, acesso desativado).
+    Não faz commit."""
+    return UserSession.query.filter(UserSession.user_id == user.id).delete(synchronize_session=False)
+
+
+def prune_sessions() -> int:
+    cfg = current_app.config
+    t = now()
+    n = UserSession.query.filter((UserSession.last_seen_at < t - timedelta(minutes=cfg["SESSION_IDLE_MINUTES"]))
+                                 | (UserSession.created_at < t - timedelta(hours=cfg["SESSION_MAX_HOURS"]))
+                                 ).delete(synchronize_session=False)
+    db.session.commit()
+    return n
 
 
 def csrf_token() -> str:
     if "csrf" not in session:
         session["csrf"] = secrets.token_hex(16)
     return session["csrf"]
+
+
+# Scripts só do próprio site. Estilo inline continua liberado (atributos style= nas telas) e as fontes vêm do Google Fonts.
+CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+       "font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; "
+       "object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'")
 
 
 def init_security(app):
@@ -124,6 +181,9 @@ def init_security(app):
         resp.headers.setdefault("X-Frame-Options", "DENY")
         resp.headers.setdefault("Referrer-Policy", "same-origin")
         resp.headers.setdefault("Cache-Control", "no-store")
+        resp.headers.setdefault("Content-Security-Policy", CSP)
+        if app.config["SESSION_COOKIE_SECURE"]:
+            resp.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
         return resp
 
 

@@ -41,6 +41,8 @@ class Config:
     LOCK_MINUTES = 15
     IP_MAX_FAILURES = int(os.environ.get("FF_IP_MAX_FAILURES", "20"))      # erros por IP dentro da janela
     IP_WINDOW_MINUTES = int(os.environ.get("FF_IP_WINDOW_MINUTES", "15"))
+    SESSION_IDLE_MINUTES = int(os.environ.get("FF_SESSION_IDLE_MINUTES", "120"))   # sem uso por esse tempo: sai
+    SESSION_MAX_HOURS = int(os.environ.get("FF_SESSION_MAX_HOURS", "12"))          # duração máxima de uma sessão
     TRUSTED_PROXIES = int(os.environ.get("FF_TRUSTED_PROXIES", "0"))       # proxies reversos à frente do app (nginx etc.)
     REQUIRE_2FA_STAFF = os.environ.get("FF_REQUIRE_2FA", "0") == "1"
     PUBLIC_BASE_URL = os.environ.get("FF_PUBLIC_URL", "http://localhost:5000")

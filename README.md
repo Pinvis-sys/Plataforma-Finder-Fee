@@ -21,7 +21,7 @@ Para ver o sistema já com dados de exemplo (apenas em ambiente de teste):
 ```bash
 flask demo-data                     # gestor@demo.test / demo-senha-123 ; parceiro3@demo.test / senha-segura-123
 flask simulate-bonus                # confere a Camada 2 em banco temporário: R$ 34.560 + R$ 17.280 = 22,5%
-pytest -q                           # 80 testes (2 só rodam com PostgreSQL); também rodam no GitHub Actions a cada push
+pytest -q                           # 111 testes (2 só rodam com PostgreSQL); também rodam no GitHub Actions a cada push
 # contra PostgreSQL (banco descartável, é apagado a cada teste):
 FF_TEST_DATABASE_URL=postgresql+psycopg://usuario:senha@localhost/finder_fee_test pytest -q
 ```
@@ -45,13 +45,15 @@ Parceiros só enxergam os próprios dados. A empresa já indicada por outro parc
    Atrás de proxy reverso (nginx, balanceador): `FF_TRUSTED_PROXIES=1` (número de proxies), senão o limite
    por IP enxerga só o endereço do proxy. **Não** ligue sem proxy: qualquer um poderia forjar o IP.
    Limite por IP (opcional): `FF_IP_MAX_FAILURES` (padrão 20 erros) em `FF_IP_WINDOW_MINUTES` (padrão 15).
+   Sessão (opcional): encerra após `FF_SESSION_IDLE_MINUTES` sem uso (padrão 120) ou `FF_SESSION_MAX_HOURS` de duração (padrão 12).
    Banco PostgreSQL (recomendado em produção): `FF_DATABASE_URL=postgresql+psycopg://usuario:senha@host/finder_fee`.
    E-mail (opcional): `FF_SMTP_HOST`, `FF_SMTP_PORT`, `FF_SMTP_USER`, `FF_SMTP_PASS`, `FF_MAIL_FROM`.
    Porta 587 usa STARTTLS e porta 465 usa SSL, escolhidos sozinhos (ou force com `FF_SMTP_SECURITY=starttls|ssl|none`;
    `none` só para relay local). O certificado do servidor é sempre verificado; servidor interno com CA própria:
    `FF_SMTP_CA_FILE=/caminho/ca.pem`.
 3. `docker build -t finder-fee . && docker run -p 8000:8000 -v finderfee-data:/srv/finder_fee/instance --env-file .env finder-fee`
-4. Rotina diária (cron): `flask run-jobs` (expira proteções vencidas, apaga o registro de tentativas de acesso com mais de 1 dia e envia avisos por e-mail).
+4. Rotina diária (cron): `flask run-jobs` (expira proteções vencidas, apaga o registro de tentativas de acesso com mais de 1 dia,
+   apaga sessões vencidas e envia avisos por e-mail).
 5. Rotina semanal (segunda-feira): `flask weekly-report`, ou pelo botão em "Relatório semanal".
 6. **Backup** da pasta `instance/` (banco, NFs anexadas e relatórios) todos os dias.
 
@@ -103,6 +105,12 @@ a comissão só é gerada quando o cliente paga. Pagamento no mês seguinte ao r
 - A situação ativa do CNPJ é confirmada manualmente pela equipe (não há consulta automática).
 - Acesso: bloqueio da conta após 5 erros (senha ou código de duas etapas) e limite de erros por IP. O limite fica
   no banco, então vale para todos os processos do gunicorn.
-- Sem política de retenção/eliminação de dados (LGPD). Recomenda-se uma revisão de segurança independente antes de
-  abrir para parceiros.
+- Sessão: fica registrada no banco (tabela `user_session`) e o cookie leva só um token. Sair, trocar a senha ou o
+  aplicativo de duas etapas, ter a senha redefinida ou o acesso desativado encerra a sessão de verdade. Trocar o
+  aplicativo de duas etapas exige o código do aplicativo atual.
+- Teste de intrusão (set/2026) contra o servidor local: controle de acesso entre parceiros e perfis, CSRF, injeção SQL,
+  XSS, upload de NF, redirecionamento, sessão, força bruta e cabeçalhos. As falhas encontradas foram corrigidas e têm
+  teste em `tests/test_seguranca.py`. Ainda vale uma revisão independente antes de abrir para parceiros.
+- O código de duas etapas pode ser reutilizado dentro da janela de 90 segundos em que é válido (exige também a senha).
+- Sem política de retenção/eliminação de dados (LGPD).
 - Feriados não vêm de fábrica e ainda não há campo na tela para cadastrá-los: hoje os prazos em dias úteis só descontam fins de semana. A lista fica em `holidays` (arquivo `app/rules.py`).

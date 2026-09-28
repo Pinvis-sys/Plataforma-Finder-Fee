@@ -140,7 +140,10 @@ def indicacao_detalhe(rid):
 def revisao():
     ref = None
     if request.args.get("indicacao") or request.form.get("indicacao"):
-        ref = Referral.query.filter_by(id=int(request.values["indicacao"]), partner_id=g.partner.id).first_or_404()
+        rid = request.values["indicacao"]
+        if not rid.isdigit():
+            abort(404)
+        ref = Referral.query.filter_by(id=int(rid), partner_id=g.partner.id).first_or_404()
     if request.method == "POST":
         try:
             svc.request_review(g.partner, request.form.get("message", ""), ref, request.form.get("cnpj"))

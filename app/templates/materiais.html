@@ -17,7 +17,7 @@
 </div>
 <div class="panel">
   <h2>Playbook e materiais</h2>
-  {% if mats %}<ul class="queue-list">{% for m in mats %}<li><a href="{{ m.url }}" target="_blank" rel="noopener">{{ m.title }}</a><span class="chip">{{ {'video':'Vídeo','pdf':'PDF','link':'Link'}[m.kind] }}</span></li>{% endfor %}</ul>
+  {% if mats %}<ul class="queue-list">{% for m in mats %}<li>{% if is_web_link(m.url) %}<a href="{{ m.url }}" target="_blank" rel="noopener noreferrer">{{ m.title }}</a>{% else %}{{ m.title }}{% endif %}<span class="chip">{{ {'video':'Vídeo','pdf':'PDF','link':'Link'}[m.kind] }}</span></li>{% endfor %}</ul>
   {% else %}<p class="empty">Os materiais serão publicados pela All Targets.</p>{% endif %}
 </div>
 <div class="panel">
