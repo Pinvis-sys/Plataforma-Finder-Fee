@@ -74,11 +74,10 @@ def send_pending_emails(app) -> int:
     return sent
 
 
-def _next_code(prefix: str, model, column, width: int) -> str:
-    n = db.session.query(func.count(model.id)).scalar() + 1
-    while db.session.query(model).filter(column == f"{prefix}{n:0{width}d}").first():
-        n += 1
-    return f"{prefix}{n:0{width}d}"
+def _code_for(prefix: str, row_id: int, width: int) -> str:
+    """Código de relatório derivado do id (único pelo banco): envios simultâneos nunca colidem.
+    No PostgreSQL a sequência pode pular números após um envio desfeito; o código continua único e estável."""
+    return f"{prefix}{row_id:0{width}d}"
 
 
 def rules_now() -> dict:
@@ -163,9 +162,9 @@ def apply_partner(data: dict, password: str, token: str | None = None, accept_no
         bonus_notice_accepted_at=now() if inviter else None,
         invite_token=secrets.token_urlsafe(18), status="candidato",
     )
-    p.code = _next_code("P", Partner, Partner.code, 2)
     db.session.add(p)
     db.session.flush()
+    p.code = _code_for("P", p.id, 2)
     u = User(email=email, name=p.contact_name, roles="participant", partner_id=p.id)
     u.set_password(password)
     db.session.add(u)
@@ -348,7 +347,7 @@ def register_referral(partner: Partner, data: dict) -> Referral:
         db.session.commit()
         raise Unavailable(UNAVAILABLE_MSG)
     ref.protocol = f"IND-{ref.created_at.year}-{ref.id:05d}"
-    ref.code = _next_code("I-", Referral, Referral.code, 3)
+    ref.code = _code_for("I-", ref.id, 3)
     audit(partner.email or partner.code, "referral.register", "referral", ref.id, code=ref.code)
     notify("nova_indicacao", f"Nova indicação {ref.protocol} de {partner.display_name}.", staff=True)
     db.session.commit()
