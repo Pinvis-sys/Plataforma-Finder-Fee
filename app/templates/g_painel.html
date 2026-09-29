@@ -24,7 +24,7 @@
 <div class="panel {{ 'flat' if key in ('indicacoes', 'candidaturas', 'atrasados') }}">
   <h2>{{ titulo }} <span class="chip wait">{{ itens|length }}</span></h2>
   <ul class="queue-list">
-  {% if key == 'indicacoes' %}{% for r in itens %}<li><a href="{{ url_for('manage.indicacao', rid=r.id) }}">{{ r.code }} · {{ r.company_name or r.cnpj|cnpj_fmt }}</a><span class="small muted">{{ r.created_at|dt }}</span></li>{% endfor %}
+  {% if key == 'indicacoes' %}{% for r in itens %}{% set dias = q.dias_indicacoes[r.id] %}<li><a href="{{ url_for('manage.indicacao', rid=r.id) }}">{{ r.code }} · {{ r.company_name or r.cnpj|cnpj_fmt }}</a><span class="chip {{ 'bad' if dias >= q.sla else ('wait' if dias >= q.sla - 1 else '') }}">{{ dias }} de {{ q.sla }} dias úteis</span></li>{% endfor %}
   {% elif key == 'candidaturas' %}{% for p, dias, sla in itens %}<li><a href="{{ url_for('manage.parceiro', pid=p.id) }}">{{ p.code }} · {{ p.display_name }}</a><span class="chip {{ 'bad' if dias >= sla else ('wait' if dias >= sla - 1 else '') }}">{{ dias }} de {{ sla }} dias úteis</span></li>{% endfor %}
   {% elif key == 'revisoes' %}{% for r in itens %}<li><div style="flex:1"><strong>{{ r.partner.code }}</strong> {{ r.message }}
       <form method="post" action="{{ url_for('manage.revisao', rrid=r.id) }}" class="inline-form" style="margin-top:.4rem"><input type="hidden" name="_csrf" value="{{ csrf_token() }}">

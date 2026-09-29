@@ -495,6 +495,38 @@ def base():
     return render_template("g_base.html", items=KnownCompany.query.order_by(KnownCompany.created_at.desc()).all())
 
 
+@bp.route("/feriados", methods=["GET", "POST"])
+@sec.roles_required(*ANY_STAFF)
+def feriados():
+    year = request.values.get("ano", type=int) or today().year
+    if request.method == "POST":
+        if not sec.current_user().has_role("admin", "manager"):
+            abort(403)
+        f = request.form
+        try:
+            if f.get("action") == "add":
+                d = parse_date(f.get("day"), "data")
+                svc.add_holiday(d, f.get("name", ""), actor())
+                ok(f"Feriado de {d:%d/%m/%Y} cadastrado.")
+                year = d.year
+            elif f.get("action") == "del":
+                d = parse_date(f.get("day"), "data")
+                svc.remove_holiday(d, actor())
+                ok(f"Feriado de {d:%d/%m/%Y} removido.")
+                year = d.year
+            elif f.get("action") == "national":
+                n = svc.add_national_holidays(year, actor(), optional=bool(f.get("optional")))
+                ok(f"{n} feriado(s) nacional(is) de {year} cadastrado(s)." if n else f"Os feriados nacionais de {year} já estavam cadastrados.")
+        except svc.ServiceError as e:
+            fail(e)
+        return redirect(url_for("manage.feriados", ano=year))
+    from ..models import Holiday
+    days = Holiday.query.filter(Holiday.day >= date(year, 1, 1), Holiday.day <= date(year, 12, 31)).order_by(Holiday.day).all()
+    legacy = sorted(d for d in active_ruleset().rules.get("holidays", []) if d.startswith(str(year)))
+    return render_template("g_feriados.html", days=days, year=year, legacy=legacy,
+                           can_edit=sec.current_user().has_role("admin", "manager"))
+
+
 @bp.route("/auditoria")
 @sec.roles_required("admin", "manager")
 def auditoria():

@@ -13,7 +13,7 @@ from werkzeug.utils import secure_filename
 from . import cnpj as cn
 from . import core, engine as eng
 from .core import db, now, today
-from .models import (ACTIVE_ELIGIBILITY, TERM_KEYS, AuditLog, CommissionLine, Contract, DirectInvite, DuplicateAttempt,
+from .models import (ACTIVE_ELIGIBILITY, TERM_KEYS, AuditLog, CommissionLine, Contract, DirectInvite, DuplicateAttempt, Holiday,
                      Installment, KnownCompany, Notification, Partner, PartnerInvoice, Receipt, Referral,
                      ReviewRequest, TermAcceptance, TermDocument, User)
 from .rules import (active_ruleset, holidays, recruit_cap_for_year, tax_rate_on)
@@ -927,6 +927,8 @@ def manager_queues(on: date | None = None) -> dict:
     warn_until = on + timedelta(days=int(rules["protection_warning_days"]))
     q = {}
     q["indicacoes_sem_validacao"] = Referral.query.filter(Referral.eligibility.in_(("recebida", "em_validacao"))).order_by(Referral.created_at).all()
+    q["dias_indicacoes"] = {r.id: eng.business_days_between(r.created_at.date(), on, hol) for r in q["indicacoes_sem_validacao"]}
+    q["sla"] = sla
     q["oportunidades_sem_atualizacao"] = Referral.query.filter(
         Referral.eligibility == "aceita", Referral.waiting.is_(False), Referral.stage.notin_(("ganha", "perdida")),
         Referral.stage_updated_at < stale_cut).all()
@@ -944,6 +946,46 @@ def manager_queues(on: date | None = None) -> dict:
     q["consentimento_pendente"] = Referral.query.filter(Referral.eligibility == "aceita", Referral.consent_status == "pendente").all()
     q["alertas_frequencia"] = frequency_alerts(rules, on)
     return q
+
+
+# ================================================================== feriados
+def add_holiday(day: date, name: str, actor: str) -> Holiday:
+    name = (name or "").strip()
+    if not name:
+        raise ServiceError("Informe o nome do feriado.")
+    if len(name) > 80:
+        raise ServiceError("O nome do feriado pode ter até 80 caracteres.")
+    if db.session.get(Holiday, day):
+        raise ServiceError(f"{day:%d/%m/%Y} já está cadastrado como feriado.")
+    h = Holiday(day=day, name=name, created_by=actor)
+    db.session.add(h)
+    audit(actor, "holiday.add", "holiday", None, day=day.isoformat(), name=name)
+    db.session.commit()
+    return h
+
+
+def remove_holiday(day: date, actor: str):
+    h = db.session.get(Holiday, day)
+    if not h:
+        raise ServiceError("Feriado não encontrado.")
+    audit(actor, "holiday.remove", "holiday", None, day=day.isoformat(), name=h.name)
+    db.session.delete(h)
+    db.session.commit()
+
+
+def add_national_holidays(year: int, actor: str, optional: bool = False) -> int:
+    """Cadastra os feriados nacionais do ano (e os pontos facultativos, se pedido). Os já cadastrados ficam como estão."""
+    from .feriados import national_holidays
+    if not 2000 <= year <= 2100:
+        raise ServiceError("Informe um ano entre 2000 e 2100.")
+    added = 0
+    for day, name in national_holidays(year, optional):
+        if not db.session.get(Holiday, day):
+            db.session.add(Holiday(day=day, name=name, created_by=actor))
+            added += 1
+    audit(actor, "holiday.add_national", "holiday", None, year=year, optional=optional, added=added)
+    db.session.commit()
+    return added
 
 
 def run_daily_jobs() -> dict:

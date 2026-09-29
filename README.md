@@ -21,7 +21,7 @@ Para ver o sistema já com dados de exemplo (apenas em ambiente de teste):
 ```bash
 flask demo-data                     # gestor@demo.test / demo-senha-123 ; parceiro3@demo.test / senha-segura-123
 flask simulate-bonus                # confere a Camada 2 em banco temporário: R$ 34.560 + R$ 17.280 = 22,5%
-pytest -q                           # 127 testes (3 só rodam com PostgreSQL); também rodam no GitHub Actions a cada push
+pytest -q                           # 142 testes (3 só rodam com PostgreSQL); também rodam no GitHub Actions a cada push
 # contra PostgreSQL (banco descartável, é apagado a cada teste):
 FF_TEST_DATABASE_URL=postgresql+psycopg://usuario:senha@localhost/finder_fee_test pytest -q
 ```
@@ -139,4 +139,7 @@ a comissão só é gerada quando o cliente paga. Pagamento no mês seguinte ao r
   teste em `tests/test_seguranca.py`. Ainda vale uma revisão independente antes de abrir para parceiros.
 - O código de duas etapas vale uma vez só: depois de usado, o mesmo código (ou um anterior) é recusado.
 - Sem política de retenção/eliminação de dados (LGPD).
-- Feriados não vêm de fábrica e ainda não há campo na tela para cadastrá-los: hoje os prazos em dias úteis só descontam fins de semana. A lista fica em `holidays` (arquivo `app/rules.py`).
+- Feriados: cadastrados em *Gestão > Feriados* (administrador ou gestor). Um botão cadastra os nacionais do ano, inclusive
+  Sexta-feira Santa, e opcionalmente os pontos facultativos (Carnaval e Corpus Christi); estaduais e municipais entram
+  um a um. Sem feriados cadastrados, os prazos em dias úteis só descontam fins de semana. Os feriados ficam fora das
+  regras versionadas: cadastrar um não cria versão nova e vale para todas as indicações.
