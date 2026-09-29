@@ -13,7 +13,8 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - run: pip install -r requirements.txt
+          cache-dependency-path: requirements-dev.lock
+      - run: pip install --require-hashes -r requirements-dev.lock
       - run: pytest -q
       - name: Simulação da Camada 2
         env:
@@ -40,5 +41,21 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - run: pip install -r requirements.txt
+          cache-dependency-path: requirements-dev.lock
+      - run: pip install --require-hashes -r requirements-dev.lock
       - run: pytest -q
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t finder-fee .
+      - name: Sobe o container e confere a saúde, o usuário e o bloqueio da chave fraca
+        run: |
+          docker run -d --name ff -p 8000:8000 -e FF_SECRET_KEY=$(python3 -c "import secrets; print(secrets.token_urlsafe(48))") -e FF_COOKIE_SECURE=0 finder-fee
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:8000/saude && break; sleep 1; done
+          curl -sf http://127.0.0.1:8000/saude
+          test "$(docker exec ff id -u)" = "10001"
+          docker logs ff 2>&1 | grep -q "Banco pronto."
+          if docker logs ff 2>&1 | grep -iE "error|traceback"; then exit 1; fi
+          if docker run --rm -e FF_SECRET_KEY=curta finder-fee flask init-db; then echo "subiu com chave fraca"; exit 1; fi

@@ -1,0 +1,30 @@
+# Proxy reverso com HTTPS na frente da plataforma. Troque portal.exemplo.com.br pelo endereço real
+# e os caminhos do certificado (ex.: Let's Encrypt com certbot). Com este proxy, use FF_TRUSTED_PROXIES=1.
+
+server {
+    listen 80;
+    server_name portal.exemplo.com.br;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name portal.exemplo.com.br;
+
+    ssl_certificate     /etc/letsencrypt/live/portal.exemplo.com.br/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/portal.exemplo.com.br/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+
+    client_max_body_size 9m;          # NF de até 8 MB (FF: MAX_CONTENT_LENGTH) mais o formulário
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        # $remote_addr substitui (não acrescenta): o cliente não consegue forjar o IP que o limite de tentativas enxerga
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_read_timeout 60s;
+    }
+}

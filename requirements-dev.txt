@@ -1,0 +1,4 @@
+# Testes e desenvolvimento, além das dependências da aplicação.
+-r requirements.txt
+pytest>=8
+aiosmtpd>=1.4

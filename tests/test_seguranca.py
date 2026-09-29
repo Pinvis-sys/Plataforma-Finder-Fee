@@ -252,3 +252,17 @@ def test_mesmo_intervalo_so_e_aceito_uma_vez_no_banco(webapp):
     assert sec.match_totp(u.totp_secret, code, at=t, after_step=lido_antes) == step   # leitura antiga deixaria passar
     assert not sec.claim_totp_step(u, step)                                          # o banco não deixa
     assert sec.claim_totp_step(u, step + 1)
+
+
+@pytest.mark.parametrize("key", ["dev-troque-esta-chave", "curta-demais", ""])
+def test_producao_recusa_chave_fraca(monkeypatch, key):
+    from app import create_app
+    monkeypatch.setenv("FF_ENV", "production")
+    with pytest.raises(RuntimeError, match="FF_SECRET_KEY"):
+        create_app({"SECRET_KEY": key, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"}, web=False)
+
+
+def test_producao_aceita_chave_longa(monkeypatch):
+    from app import create_app
+    monkeypatch.setenv("FF_ENV", "production")
+    create_app({"SECRET_KEY": "x" * 32, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"}, web=False)

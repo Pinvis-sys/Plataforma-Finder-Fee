@@ -25,6 +25,18 @@ def register_web(app):
         return {"me": u, "unread": unread, "PARTNER_STATUS": PARTNER_STATUS, "STAGES": STAGES, "FIN_STATES": FIN_STATES,
                 "ELIGIBILITY": ELIGIBILITY, "PARTNER_KINDS": PARTNER_KINDS, "endpoint": request.endpoint or ""}
 
+    @app.route("/saude")
+    def saude():
+        """Verificação de funcionamento (Docker, balanceador): responde 200 se o banco atende."""
+        from sqlalchemy import text
+        from ..core import db
+        try:
+            db.session.execute(text("SELECT 1"))
+        except Exception:  # noqa: BLE001 - qualquer falha do banco é "fora do ar"
+            db.session.rollback()
+            return {"status": "erro", "banco": "indisponível"}, 503
+        return {"status": "ok"}
+
     @app.errorhandler(403)
     def _403(e):
         return render_template("erro.html", titulo="Acesso não permitido", msg="Seu perfil não tem acesso a esta página."), 403

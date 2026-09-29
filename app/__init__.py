@@ -23,8 +23,12 @@ def create_app(config: dict | None = None, web: bool = True) -> Flask:
     uri = app.config["SQLALCHEMY_DATABASE_URI"]
     if uri.startswith("sqlite:///") and not uri.startswith("sqlite:////") and ":memory:" not in uri:
         app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///" + os.path.join(app.instance_path, uri.replace("sqlite:///", ""))
-    if app.config["SECRET_KEY"] == "dev-troque-esta-chave" and os.environ.get("FF_ENV") == "production":
-        raise RuntimeError("Defina FF_SECRET_KEY em produção.")
+    if os.environ.get("FF_ENV") == "production":
+        key = app.config["SECRET_KEY"] or ""
+        if key == "dev-troque-esta-chave" or len(key) < 32:
+            # a chave assina o cookie de sessão: curta ou conhecida, dá para forjar
+            raise RuntimeError("Defina FF_SECRET_KEY em produção, com ao menos 32 caracteres aleatórios "
+                               "(ex.: python -c \"import secrets; print(secrets.token_urlsafe(48))\").")
 
     if app.config["TRUSTED_PROXIES"] > 0:
         from werkzeug.middleware.proxy_fix import ProxyFix
@@ -89,6 +93,18 @@ def _register_cli(app: Flask):
         from . import services
         click.echo(services.run_daily_jobs())
         click.echo(f"E-mails enviados: {services.send_pending_emails(app)}")
+
+    @app.cli.command("email-backlog")
+    @click.option("--discard", is_flag=True, help="Marca todos os avisos da fila como tratados, sem enviar.")
+    def email_backlog(discard):
+        """Mostra os avisos que ainda sairiam por e-mail. Use --discard antes de ligar o SMTP pela primeira vez."""
+        from . import services
+        info = services.email_backlog()
+        quando = core.dt(info["mais_antigo"], with_time=True) if info["mais_antigo"] else "—"
+        click.echo(f"Avisos na fila de e-mail: {info['pendentes']} (mais antigo: {quando}).")
+        if discard:
+            n = services.discard_email_backlog("cli")
+            click.echo(f"{n} aviso(s) descartado(s). Continuam visíveis no portal; não sairão por e-mail.")
 
     @app.cli.command("weekly-report")
     @click.option("--week-end", default=None, help="Domingo de fechamento (AAAA-MM-DD). Padrão: último domingo.")
