@@ -82,6 +82,9 @@ docker exec -it finder-fee flask create-user voce@empresa.com.br "Seu Nome" --ro
 Entre em `https://portal.exemplo.com.br`. Com `FF_REQUIRE_2FA=1`, o portal pede para cadastrar a verificação em
 duas etapas antes de liberar a gestão.
 
+Depois, em **Feriados**, cadastre os feriados nacionais do ano (e os do estado e da cidade da empresa). Sem isso, os
+prazos em dias úteis só descontam fins de semana. Repita no começo de cada ano.
+
 ## 7. Conferência depois de subir
 
 | Verificação | Como | Esperado |

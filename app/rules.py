@@ -123,5 +123,10 @@ def recruit_cap_for_year(rules: dict, year: int) -> int:
     return int(caps.get(str(year), caps.get("default", 3)))
 
 
-def holidays(rules: dict) -> frozenset:
-    return frozenset(date.fromisoformat(d) for d in rules.get("holidays", []))
+def holidays(rules: dict | None = None) -> frozenset:
+    """Dias que não contam nos prazos em dias úteis: os cadastrados em Gestão > Feriados e, por
+    compatibilidade, os que estiverem em rules["holidays"] (lista usada antes da tela existir)."""
+    from .models import Holiday
+    days = {h.day for h in Holiday.query.all()}
+    days |= {date.fromisoformat(d) for d in (rules or {}).get("holidays", [])}
+    return frozenset(days)

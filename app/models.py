@@ -400,6 +400,16 @@ class LoginAttempt(db.Model):
     at = db.Column(db.DateTime, default=now, nullable=False, index=True)
 
 
+class Holiday(db.Model):
+    """Dia sem expediente: não conta nos prazos em dias úteis. Fica fora das regras versionadas,
+    porque é fato do calendário: vale para todas as indicações, qualquer que seja a versão das regras."""
+    __tablename__ = "holiday"
+    day = db.Column(db.Date, primary_key=True)
+    name = db.Column(db.String(80), nullable=False)
+    created_by = db.Column(db.String(120))
+    created_at = db.Column(db.DateTime, default=now, nullable=False)
+
+
 class UserSession(db.Model):
     """Sessão aberta. O cookie leva só o token; sair, trocar a senha ou desativar o usuário apaga a linha."""
     __tablename__ = "user_session"
