@@ -84,6 +84,30 @@ def _permanent_refusal(exc) -> tuple[int, str] | None:
     return code, msg.decode(errors="replace") if isinstance(msg, bytes) else str(msg)
 
 
+def _email_queue():
+    return Notification.query.filter(Notification.emailed_at.is_(None), Notification.user_id.isnot(None))
+
+
+def email_backlog() -> dict:
+    """Avisos que ainda sairiam por e-mail: quantos são e de quando é o mais antigo."""
+    q = _email_queue()
+    oldest = q.order_by(Notification.created_at).first()
+    return {"pendentes": q.count(), "mais_antigo": oldest.created_at if oldest else None}
+
+
+def discard_email_backlog(actor: str, older_than: datetime | None = None) -> int:
+    """Marca avisos da fila como tratados sem enviar (continuam visíveis no portal). Sem `older_than`, descarta todos."""
+    q = _email_queue()
+    if older_than is not None:
+        q = q.filter(Notification.created_at < older_than)
+    n = q.update({"emailed_at": now()}, synchronize_session=False)
+    if n:
+        audit(actor, "email.discarded", "notification", None, count=n,
+              older_than=older_than.isoformat(timespec="minutes") if older_than else None)
+    db.session.commit()
+    return n
+
+
 def send_pending_emails(app) -> int:
     """Envia por SMTP os avisos ainda não enviados (se SMTP configurado). Rodar por cron.
 
@@ -95,8 +119,9 @@ def send_pending_emails(app) -> int:
     if not cfg.get("SMTP_HOST"):
         return 0
     from email.message import EmailMessage
+    discard_email_backlog("sistema", now() - timedelta(days=cfg["EMAIL_MAX_AGE_DAYS"]))
     sent = 0
-    pend = Notification.query.filter(Notification.emailed_at.is_(None), Notification.user_id.isnot(None)).order_by(Notification.id).limit(200).all()
+    pend = _email_queue().order_by(Notification.id).limit(200).all()
     if not pend:
         return 0
     with _smtp_connect(cfg) as smtp:

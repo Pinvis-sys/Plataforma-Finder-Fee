@@ -54,6 +54,8 @@ class Config:
     SMTP_SECURITY = os.environ.get("FF_SMTP_SECURITY", "")
     SMTP_CA_FILE = os.environ.get("FF_SMTP_CA_FILE", "")      # CA própria (servidor interno); vazio = CAs do sistema
     SMTP_TIMEOUT = int(os.environ.get("FF_SMTP_TIMEOUT", "15"))
+    # aviso mais antigo que isso não sai por e-mail (continua no portal): evita a enxurrada ao ligar o SMTP
+    EMAIL_MAX_AGE_DAYS = int(os.environ.get("FF_EMAIL_MAX_AGE_DAYS", "7"))
     MAIL_FROM = os.environ.get("FF_MAIL_FROM", "programa@alltargets.example")
     TESTING = False
 

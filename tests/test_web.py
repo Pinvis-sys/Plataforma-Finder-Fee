@@ -251,3 +251,8 @@ def test_proxy_confiavel_usa_ip_do_cabecalho(tmp_path):
 
     r = app.test_client().get("/_ip", headers={"X-Forwarded-For": "203.0.113.7"})
     assert r.get_data(as_text=True) == "203.0.113.7"
+
+
+def test_saude_responde_sem_login(webapp):
+    r = webapp.test_client().get("/saude")
+    assert r.status_code == 200 and r.get_json() == {"status": "ok"}

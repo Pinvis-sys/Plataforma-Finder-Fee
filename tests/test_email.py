@@ -183,3 +183,33 @@ def test_falha_temporaria_para_o_lote_sem_perder_o_que_saiu(app, smtp_server):
 def test_seguranca_invalida_e_recusada(app):
     with pytest.raises(ValueError, match="FF_SMTP_SECURITY"):
         svc._smtp_connect({**app.config, "SMTP_HOST": "x", "SMTP_SECURITY": "tls-sim"})
+
+
+def test_aviso_antigo_nao_sai_por_email(app, smtp_server):
+    """Ao ligar o SMTP, o que ficou acumulado há mais de FF_EMAIL_MAX_AGE_DAYS não vira uma enxurrada de e-mails."""
+    from datetime import timedelta
+    from app.core import now
+    caixa, porta = smtp_server("starttls")
+    _config(app, porta)
+    _avisos("velho@t.test", "novo@t.test")
+    for n in Notification.query.all():
+        if "velho@" in n.message:
+            n.created_at = now() - timedelta(days=app.config["EMAIL_MAX_AGE_DAYS"] + 1)
+    db.session.commit()
+    assert svc.send_pending_emails(app) == 1
+    assert caixa.destinos == ["novo@t.test"]
+    assert _pendentes() == 0
+    log = AuditLog.query.filter_by(action="email.discarded").one()
+    assert log.details["count"] == 1
+
+
+def test_comando_mostra_e_descarta_a_fila(app):
+    _avisos("a@t.test", "b@t.test")
+    runner = app.test_cli_runner()
+    r = runner.invoke(args=["email-backlog"])
+    assert r.exit_code == 0 and "Avisos na fila de e-mail: 2" in r.output
+    assert _pendentes() == 2                                   # só mostrar não mexe na fila
+    r = runner.invoke(args=["email-backlog", "--discard"])
+    assert r.exit_code == 0 and "2 aviso(s) descartado(s)" in r.output
+    assert _pendentes() == 0
+    assert Notification.query.filter(Notification.read_at.is_(None)).count() == 2   # continuam no portal
