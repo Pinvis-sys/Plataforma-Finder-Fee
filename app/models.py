@@ -118,6 +118,7 @@ class Partner(db.Model):
     bank_holder_doc = db.Column(db.String(14))
     bank_verified = db.Column(db.Boolean, default=False, nullable=False)
     is_pilot_direct = db.Column(db.Boolean, default=True, nullable=False)   # False = recrutado
+    anonymized_at = db.Column(db.DateTime)                  # dados pessoais limpos (LGPD); ver app/privacidade.py
 
     users = db.relationship("User", foreign_keys="User.partner_id", back_populates="partner")
     invited_by = db.relationship("Partner", remote_side=[id], foreign_keys=[invited_by_id])
@@ -194,6 +195,7 @@ class Referral(db.Model):
     delayed_capacity = db.Column(db.Boolean, default=False, nullable=False)
     old_contact_flag = db.Column(db.Boolean, default=False, nullable=False)
     internal_notes = db.Column(db.Text)
+    anonymized_at = db.Column(db.DateTime)                  # dados pessoais limpos (LGPD); ver app/privacidade.py
 
     partner = db.relationship("Partner", foreign_keys=[partner_id])
     rule_set = db.relationship("RuleSet")

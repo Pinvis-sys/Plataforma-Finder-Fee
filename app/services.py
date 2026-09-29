@@ -989,6 +989,7 @@ def add_national_holidays(year: int, actor: str, optional: bool = False) -> int:
 
 
 def run_daily_jobs() -> dict:
+    from .privacidade import apply_retention
     from .security import prune_login_attempts, prune_sessions
     return {"expiradas": expire_protections(), "tentativas_removidas": prune_login_attempts(),
-            "sessoes_encerradas": prune_sessions()}
+            "sessoes_encerradas": prune_sessions(), "retencao": apply_retention()}

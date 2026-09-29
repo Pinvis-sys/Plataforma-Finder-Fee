@@ -106,6 +106,25 @@ def _register_cli(app: Flask):
             n = services.discard_email_backlog("cli")
             click.echo(f"{n} aviso(s) descartado(s). Continuam visíveis no portal; não sairão por e-mail.")
 
+    @app.cli.command("retention")
+    @click.option("--apply", "do_apply", is_flag=True, help="Aplica os prazos (sem isto, só mostra o que seria feito).")
+    def retention(do_apply):
+        """Retenção de dados pessoais (LGPD): mostra ou aplica os prazos definidos em Regras e parâmetros."""
+        from . import privacidade
+        prev = privacidade.retention_preview()
+        pol = prev["policy"]
+        for k, label in (("retention_referral_months", "Indicações encerradas sem contrato"),
+                         ("retention_partner_months", "Parceiros não aprovados ou suspensos"),
+                         ("retention_notification_months", "Avisos do portal")):
+            click.echo(f"{label}: {str(pol[k]) + ' meses' if pol[k] else 'prazo não definido (não aplica)'}")
+        click.echo(f"Seriam anonimizados agora: {len(prev['referrals'])} indicação(ões), {len(prev['partners'])} parceiro(s); "
+                   f"{prev['notifications']} aviso(s) apagados.")
+        if prev["partners_blocked"]:
+            click.echo("Parceiros no prazo, mas com pagamento pendente (ficam para depois): "
+                       + ", ".join(p.code for p in prev["partners_blocked"]))
+        if do_apply:
+            click.echo(f"Aplicado: {privacidade.apply_retention('cli')}")
+
     @app.cli.command("weekly-report")
     @click.option("--week-end", default=None, help="Domingo de fechamento (AAAA-MM-DD). Padrão: último domingo.")
     def weekly_report(week_end):

@@ -47,6 +47,10 @@ DEFAULT_RULES: dict = {
     "high_frequency_threshold": 6,       # aceitas em 12 meses (alerta de recorrência)
     "channel_cost_limit": None,          # a definir com a precificação final
     "holidays": [],
+    # --- retenção de dados pessoais (LGPD). Vazio = não aplicar: nada é anonimizado até o jurídico definir.
+    "retention_referral_months": None,      # indicação encerrada sem contrato: anonimiza o decisor após N meses
+    "retention_partner_months": None,       # parceiro não aprovado ou suspenso: anonimiza o contato após N meses
+    "retention_notification_months": None,  # avisos do portal: apaga após N meses
 }
 
 PENDING_DECISIONS = {
@@ -58,6 +62,9 @@ PENDING_DECISIONS = {
     "channel_cost_limit": "Limite de custo do canal depende da precificação final e da margem.",
     "commission_overrides": "Percentual por produto, tipo de base e público depende da precificação.",
     "tax_rates": "Alíquotas são ilustrativas; confirmar com a área tributária.",
+    "retention_referral_months": "LGPD: prazo para anonimizar dados do decisor de indicação encerrada sem contrato.",
+    "retention_partner_months": "LGPD: prazo para anonimizar dados de parceiro não aprovado ou suspenso.",
+    "retention_notification_months": "LGPD: prazo para apagar os avisos do portal.",
 }
 
 
