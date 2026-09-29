@@ -28,7 +28,8 @@
   <h2>Dados registrados</h2>
   <dl class="kv">
     <dt>CNPJ</dt><dd>{{ ref.cnpj|cnpj_fmt }}</dd>
-    <dt>Decisor</dt><dd>{{ ref.decisor_name }}{% if ref.decisor_role %}, {{ ref.decisor_role }}{% endif %}</dd>
+    {% if ref.anonymized_at %}<dt>Dados pessoais</dt><dd class="muted">Anonimizados em {{ ref.anonymized_at|dt }} (LGPD).</dd>{% endif %}
+    <dt>Decisor</dt><dd>{{ ref.decisor_name or '—' }}{% if ref.decisor_role %}, {{ ref.decisor_role }}{% endif %}</dd>
     <dt>Sinal observado</dt><dd>{{ ref.signal }}</dd>
     <dt>Interesse</dt><dd>{{ ref.interest or '—' }}</dd>
   </dl>

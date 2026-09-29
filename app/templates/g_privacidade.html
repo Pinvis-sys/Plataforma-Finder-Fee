@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+{% block title %}Privacidade (LGPD){% endblock %}
+{% block h1 %}Privacidade (LGPD){% endblock %}
+{% block sub %}Retenção e anonimização de dados pessoais. Anonimizar limpa os dados da pessoa e mantém códigos, valores e o CNPJ da empresa.{% endblock %}
+{% set labels = {'retention_referral_months': 'Indicação encerrada sem contrato: dados do decisor e textos livres',
+                 'retention_partner_months': 'Parceiro não aprovado ou suspenso: dados de contato, dados bancários e acesso',
+                 'retention_notification_months': 'Avisos do portal: apagados'} %}
+{% block content %}
+<div class="panel"><h2>Prazos em vigor</h2>
+  <table><thead><tr><th>O que</th><th>Prazo</th></tr></thead><tbody>
+  {% for k, label in labels.items() %}<tr><td>{{ label }}</td>
+    <td>{% if prev.policy[k] %}{{ prev.policy[k] }} meses{% else %}<span class="chip wait">A definir</span> <span class="small muted">não aplica</span>{% endif %}</td></tr>{% endfor %}
+  </tbody></table>
+  <p class="small muted">Os prazos são definidos com o jurídico e editados em <a href="{{ url_for('manage.parametros') }}">Regras e parâmetros</a>
+    (cada mudança cria uma versão, com motivo). Sem prazo, nada é anonimizado automaticamente. Com prazo, a rotina diária
+    (<code>flask run-jobs</code>) aplica sozinha.</p>
+  <p class="small muted">Nunca são alterados: contratos, recebimentos, comissões, pagamentos e notas fiscais (obrigação legal de guarda).</p>
+</div>
+<div class="panel"><h2>O que os prazos anonimizariam hoje</h2>
+  <ul class="queue-list">
+    <li><span>Indicações encerradas sem contrato</span><span class="chip">{{ prev.referrals|length }}</span></li>
+    <li><span>Parceiros não aprovados ou suspensos</span><span class="chip">{{ prev.partners|length }}</span></li>
+    {% if prev.partners_blocked %}<li><span>Parceiros no prazo, mas com pagamento pendente (ficam para depois):
+      {% for p in prev.partners_blocked %}<a href="{{ url_for('manage.parceiro', pid=p.id) }}">{{ p.code }}</a>{{ ', ' if not loop.last }}{% endfor %}</span></li>{% endif %}
+    <li><span>Avisos do portal a apagar</span><span class="chip">{{ prev.notifications }}</span></li>
+  </ul>
+  {% if is_admin and (prev.referrals or prev.partners or prev.notifications) %}
+  <form method="post" class="stack" style="margin-top:.8rem"><input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <p class="small muted">A rotina diária já faz isso. Use o botão para aplicar agora. Não pode ser desfeito.</p>
+    <div><button type="submit">Aplicar os prazos agora</button></div></form>{% endif %}
+</div>
+<div class="panel"><h2>Pedido do titular</h2>
+  <p>Quem pedir a eliminação dos próprios dados (art. 18 da LGPD) é atendido pelo administrador na tela da
+  <a href="{{ url_for('manage.indicacoes') }}">indicação</a> (decisor indicado) ou do <a href="{{ url_for('manage.parceiros') }}">parceiro</a>
+  (pessoa de contato), no quadro "Dados pessoais (LGPD)".</p>
+</div>
+<div class="panel"><h2>Histórico</h2>
+  <table><thead><tr><th>Quando</th><th>Quem</th><th>O que</th></tr></thead><tbody>
+  {% for l in logs %}<tr><td>{{ l.at|dt(True) }}</td><td>{{ l.actor }}</td>
+    <td>{% if l.action == 'privacy.retention' %}Prazos aplicados: {{ l.details.referrals }} indicação(ões), {{ l.details.partners }} parceiro(s), {{ l.details.notifications }} aviso(s)
+        {% else %}{{ 'Indicação' if l.action == 'privacy.anonymize_referral' else 'Parceiro' }} {{ l.details.code }} anonimizado. Motivo: {{ l.details.reason }}{% endif %}</td></tr>
+  {% else %}<tr><td colspan="3" class="empty">Nenhuma anonimização até agora.</td></tr>{% endfor %}
+  </tbody></table></div>
+{% endblock %}

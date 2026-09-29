@@ -10,7 +10,7 @@
   <h2>Dados da indicação</h2>
   <dl class="kv">
     <dt>CNPJ</dt><dd>{{ ref.cnpj|cnpj_fmt }}</dd>
-    <dt>Decisor</dt><dd>{{ ref.decisor_name }}{% if ref.decisor_role %}, {{ ref.decisor_role }}{% endif %}<br><span class="small muted">{{ ref.decisor_contact or '' }}</span></dd>
+    <dt>Decisor</dt><dd>{{ ref.decisor_name or '—' }}{% if ref.decisor_role %}, {{ ref.decisor_role }}{% endif %}<br><span class="small muted">{{ ref.decisor_contact or '' }}</span></dd>
     <dt>Sinal observado</dt><dd>{{ ref.signal }}</dd>
     <dt>Interesse</dt><dd>{{ ref.interest or '—' }}</dd>
     <dt>Relação</dt><dd>{{ ref.relationship or '—' }}</dd>
@@ -98,5 +98,18 @@
     <label class="check"><input type="checkbox" name="delayed_capacity" {{ 'checked' if ref.delayed_capacity }}> Atendimento atrasado por falta de capacidade dos sócios</label>
     <label>Notas<textarea name="internal_notes">{{ ref.internal_notes or '' }}</textarea></label>
     <button type="submit" class="secondary">Salvar anotações</button></form></div>
+{% endif %}
+{% if me.has_role('admin') %}
+<div class="panel"><h2>Dados pessoais (LGPD)</h2>
+  {% if ref.anonymized_at %}<p class="flash ok">Dados pessoais anonimizados em {{ ref.anonymized_at|dt(True) }}.</p>
+  {% else %}<p class="small muted">A pedido do titular (o decisor indicado): limpa nome, cargo, contato, sinal observado, interesse e anotações.
+    {% if ref.contracts %}A empresa e o contrato ficam (obrigação legal de guarda).{% else %}O nome da empresa também é removido; o CNPJ fica.{% endif %}
+    {% if not ref.contracts and ref.eligibility in ('recebida', 'em_validacao', 'aceita') and not (ref.eligibility == 'aceita' and ref.stage == 'perdida') %}<strong>A indicação será encerrada</strong> (sem os dados, não há contato) e o parceiro será avisado.{% endif %}
+    Não pode ser desfeito.</p>
+  <form method="post" class="stack"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="anonymize">
+    <label>Motivo<input type="text" name="reason" required placeholder="Pedido do titular por e-mail em 10/10/2026"></label>
+    <label class="check"><input type="checkbox" name="confirm" required> Entendo que a anonimização não pode ser desfeita</label>
+    <div><button type="submit" class="secondary">Anonimizar dados pessoais</button></div></form>{% endif %}
+</div>
 {% endif %}
 {% endblock %}

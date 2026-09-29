@@ -51,4 +51,16 @@
 {% if can_edit %}<div class="panel"><h2>Corrigir vínculo de convite</h2><p class="small muted">Use quando o parceiro se cadastrou sem o link. Exige evidência e fica na auditoria.</p>
   <form method="post" class="inline-form"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="link">
     <label>Código de quem convidou (vazio = convite direto)<input type="text" name="inviter" placeholder="P01"></label><label>Evidência *<input type="text" name="reason" required></label><button class="secondary" type="submit">Corrigir vínculo</button></form></div>{% endif %}
+{% if me.has_role('admin') %}
+<div class="panel"><h2>Dados pessoais (LGPD)</h2>
+  {% if p.anonymized_at %}<p class="flash ok">Dados pessoais anonimizados em {{ p.anonymized_at|dt(True) }}. O acesso foi desativado.</p>
+  {% else %}<p class="small muted">A pedido do titular (a pessoa de contato): limpa nome, telefone, e-mail, cidade, dados bancários, anotações e o IP dos aceites,
+    e desativa o acesso. Ficam CNPJ, razão social, contratos, comissões, pagamentos e notas fiscais (obrigação legal de guarda). Não pode ser desfeito.</p>
+  {% if blockers %}<ul>{% for b in blockers %}<li>{{ b }}</li>{% endfor %}</ul>
+  {% else %}<form method="post" class="stack"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="anonymize">
+    <label>Motivo<input type="text" name="reason" required placeholder="Pedido do titular por e-mail em 10/10/2026"></label>
+    <label class="check"><input type="checkbox" name="confirm" required> Entendo que a anonimização não pode ser desfeita</label>
+    <div><button type="submit" class="secondary">Anonimizar dados pessoais</button></div></form>{% endif %}{% endif %}
+</div>
+{% endif %}
 {% endblock %}

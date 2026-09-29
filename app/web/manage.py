@@ -10,6 +10,7 @@ from flask import (Blueprint, abort, current_app, flash, redirect, render_templa
 
 from .. import cnpj as cn
 from .. import engine as eng
+from .. import privacidade as privacy
 from .. import reports
 from .. import security as sec
 from .. import services as svc
@@ -65,10 +66,13 @@ def indicacao(rid):
     ref = db.session.get(Referral, rid) or abort(404)
     if request.method == "POST":
         u = sec.current_user()
-        if not u.has_role(*COMMERCIAL):
-            abort(403)
         f = request.form
         act = f.get("action")
+        if act == "anonymize":
+            return _anonymize(u, "manage.indicacao", {"rid": rid},
+                              lambda reason: privacy.anonymize_referral(ref, actor(), reason))
+        if not u.has_role(*COMMERCIAL):
+            abort(403)
         try:
             if act in ("start_review", "accept", "reject"):
                 fit = {"sim": True, "nao": False}.get(f.get("fits_target"))
@@ -153,6 +157,9 @@ def parceiro(pid):
         u = sec.current_user()
         f = request.form
         act = f.get("action")
+        if act == "anonymize":
+            return _anonymize(u, "manage.parceiro", {"pid": pid},
+                              lambda reason: privacy.anonymize_partner(p, actor(), reason))
         try:
             if act in ("verify_cnpj", "approve", "reject", "workshop", "conflict", "level", "suspend", "reactivate", "link", "bank"):
                 if not u.has_role(*COMMERCIAL):
@@ -206,7 +213,7 @@ def parceiro(pid):
     refs = Referral.query.filter_by(partner_id=p.id).order_by(Referral.created_at.desc()).all()
     recruited = Partner.query.filter_by(invited_by_id=p.id).all()
     return render_template("g_parceiro.html", p=p, refs=refs, recruited=recruited, can_edit=sec.current_user().has_role(*COMMERCIAL),
-                           can_fin=sec.current_user().has_role(*FINANCE))
+                           can_fin=sec.current_user().has_role(*FINANCE), blockers=privacy.partner_blockers(p))
 
 
 # ================================================================== Tela 8: financeiro
@@ -369,6 +376,9 @@ FORM_PARAMS = [
     ("nf_deadline_day", "Prazo mensal da NF (dia do mês)", "int?"), ("sla_review_days", "Prazo de análise (dias úteis)", "int"),
     ("first_contact_days", "Primeiro contato (dias úteis)", "int"), ("high_frequency_threshold", "Alerta de recorrência (aceitas em 12 meses)", "int"),
     ("pilot_recruit_limit", "Recrutamentos no piloto (total)", "int"), ("channel_cost_limit", "Limite de custo do canal (% da receita líquida, vazio = a definir)", "pct?"),
+    ("retention_referral_months", "LGPD: anonimizar indicação encerrada sem contrato após (meses, vazio = não aplicar)", "int?"),
+    ("retention_partner_months", "LGPD: anonimizar parceiro não aprovado ou suspenso após (meses, vazio = não aplicar)", "int?"),
+    ("retention_notification_months", "LGPD: apagar avisos do portal após (meses, vazio = não aplicar)", "int?"),
 ]
 
 
@@ -405,6 +415,9 @@ def parametros():
             for k in ("commission_pct", "bonus_pct"):
                 if not (Decimal("0") <= Decimal(changes[k]) <= Decimal("1")):
                     raise svc.ServiceError("Percentuais devem ficar entre 0% e 100%.")
+            for k in ("retention_referral_months", "retention_partner_months", "retention_notification_months"):
+                if changes[k] is not None and changes[k] < 1:
+                    raise svc.ServiceError("Os prazos de retenção (LGPD) precisam ser de ao menos 1 mês, ou ficar vazios.")
             rs = new_version(cur, changes, actor(), f["note"].strip())
             svc.audit(actor(), "rules.new_version", "rule_set", rs.id, note=f["note"])
             db.session.commit()
@@ -493,6 +506,39 @@ def base():
             fail(e)
         return redirect(url_for("manage.base"))
     return render_template("g_base.html", items=KnownCompany.query.order_by(KnownCompany.created_at.desc()).all())
+
+
+# ================================================================== privacidade (LGPD)
+def _anonymize(u, endpoint, kw, do):
+    """Anonimização a pedido do titular: só administrador, com motivo e confirmação. Não se desfaz."""
+    if not u.has_role("admin"):
+        abort(403)
+    f = request.form
+    try:
+        if not f.get("confirm"):
+            raise privacy.PrivacyError("Marque a confirmação: a anonimização não pode ser desfeita.")
+        do(f.get("reason", ""))
+        db.session.commit()
+        ok("Dados pessoais anonimizados. O registro ficou na auditoria.")
+    except privacy.PrivacyError as e:
+        db.session.rollback()
+        fail(e)
+    return redirect(url_for(endpoint, **kw))
+
+
+@bp.route("/privacidade", methods=["GET", "POST"])
+@sec.roles_required("admin", "manager")
+def privacidade():
+    if request.method == "POST":
+        if not sec.current_user().has_role("admin"):
+            abort(403)
+        out = privacy.apply_retention(actor())
+        ok(f"Prazos aplicados: {out['indicacoes']} indicação(ões) e {out['parceiros']} parceiro(s) anonimizados, "
+           f"{out['avisos']} aviso(s) apagados.")
+        return redirect(url_for("manage.privacidade"))
+    logs = (AuditLog.query.filter(AuditLog.action.like("privacy.%")).order_by(AuditLog.id.desc()).limit(50).all())
+    return render_template("g_privacidade.html", prev=privacy.retention_preview(), logs=logs,
+                           is_admin=sec.current_user().has_role("admin"))
 
 
 @bp.route("/feriados", methods=["GET", "POST"])

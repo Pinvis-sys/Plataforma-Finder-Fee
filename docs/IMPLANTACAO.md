@@ -158,7 +158,17 @@ disser o contrário.
 Sem migração nova, basta subir a imagem anterior
 (o mesmo `docker run` do passo 4, trocando `finder-fee` no final por `finder-fee:anterior`).
 
-## 12. Segurança da operação
+## 12. Dados pessoais (LGPD)
+
+- **Prazos de retenção:** com o jurídico, preencha os três prazos "LGPD" em *Regras e parâmetros*. Enquanto estiverem
+  vazios, nada é anonimizado. Depois de preenchidos, a rotina diária (`flask run-jobs`) aplica sozinha. Antes, veja a
+  prévia: `docker exec finder-fee flask retention` (ou a tela *Privacidade (LGPD)*).
+- **Pedido do titular:** o administrador abre a indicação (decisor) ou o parceiro (pessoa de contato) e usa o quadro
+  "Dados pessoais (LGPD)". O parceiro precisa estar suspenso e sem pagamento pendente.
+- **Backups** guardam os dados como estavam: um dado anonimizado some dos backups quando eles vencem (30 dias no
+  `scripts/backup.sh`). Ajuste `DIAS` se o jurídico pedir outro prazo.
+
+## 13. Segurança da operação
 
 - `.env` com `chmod 600`, fora do Git e fora de backups sem criptografia. Nele estão a chave de sessão e as senhas
   do banco e do SMTP.
